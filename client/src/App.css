@@ -1,7 +1,7 @@
 body {
   margin: 0;
   font-family: Arial, sans-serif;
-  background-color: #f3f4f6;
+  background-color: red;
 }
 
 .container {
@@ -40,5 +40,6 @@ body {
   background-color: white;
   padding: 16px;
   border-radius: 4px;
+  color: #2563eb;
   box-shadow: 0 0 5px rgba(0,0,0,0.1);
 }
