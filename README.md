@@ -33,4 +33,4 @@
 - **Backend:** Node.js, Express.js  
 - **Database:** MongoDB  
 - **AI/ML:** OpenAI GPT-4 / Mistral, LangChain, Code Embeddings (Chroma)  
-- **Integrations:** GitHub API, Git Diffs 
+- **Integrations:** GitHub API, Git Diffs
