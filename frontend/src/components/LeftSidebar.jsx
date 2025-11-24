@@ -1,6 +1,14 @@
+
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { LogOut, GitBranch } from "lucide-react";
+import {
+  LogOut,
+  GitBranch,
+  FolderGit2,
+  Loader2,
+  FileCode,
+} from "lucide-react";
+
 import { useAuth } from "../context/AuthContext";
 import { useRepo } from "../context/RepoContext";
 
@@ -11,115 +19,192 @@ export default function LeftSidebar() {
   const [openProfile, setOpenProfile] = useState(false);
 
   return (
-    <div
-      className="
-        min-h-full w-[250px]
-        bg-[#0F1115]/80 backdrop-blur-2xl
-        border-r border-[#1d2127]
-        flex flex-col relative
-        shadow-[4px_0_20px_-10px_rgba(0,0,0,0.4)]
-      "
-    >
-      {/* Vertical Glow */}
-      <div className="absolute right-0 top-0 h-full w-[1px] bg-gradient-to-b from-transparent via-[#3B82F6]/30 to-transparent" />
+    <div className="
+      min-h-full w-[270px]
+      bg-[#0C0D10]/90 backdrop-blur-2xl
+      border-r border-[#1a1d22]
+      flex flex-col relative
+      shadow-[4px_0_20px_-10px_rgba(0,0,0,0.4)]
+    ">
 
-      {/* Title */}
-      <div className="mt-6 px-4 text-xs font-semibold tracking-wider text-gray-500 uppercase">
-        Repositories
+      {/* Divider Glow */}
+      <div className="absolute right-0 top-0 h-full w-[1px] bg-gradient-to-b from-transparent via-[#3B82F6]/40 to-transparent" />
+
+      {/* Header */}
+      <div className="px-5 pt-6">
+        <h2 className="text-xs font-semibold tracking-[0.14em] text-gray-500 uppercase">
+          Your Repositories
+        </h2>
       </div>
 
-      {/* REPO LIST */}
-      <div className="mt-3 px-3 space-y-2 overflow-y-auto flex-1">
+      {/* Repo List */}
+      <div className="mt-4 px-4 overflow-y-auto flex-1 space-y-3">
 
+        {/* Loading */}
         {loadingRepos && (
-          <p className="text-gray-500 text-sm text-center mt-4">Loading...</p>
+          <div className="flex flex-col items-center mt-10 gap-2 text-gray-500">
+            <Loader2 className="animate-spin" size={20} />
+            <span className="text-sm">Fetching repositories…</span>
+          </div>
         )}
 
+        {/* Empty state */}
         {!loadingRepos && repos.length === 0 && (
-          <p className="text-gray-500 text-sm text-center mt-4">
-            No repositories imported.
+          <p className="text-gray-500 text-sm text-center mt-10">
+            No repositories imported yet.
           </p>
         )}
 
+        {/* Repo Cards */}
         {!loadingRepos &&
-          repos.map((repo) => (
-            <motion.div
-              key={repo.repoId}
-              onClick={() => setActiveRepo(repo.repoId)}
-              whileTap={{ scale: 0.97 }}
-              className={`
-                flex items-center gap-3 px-3 py-2 rounded-xl
-                cursor-pointer transition-all border
+          repos.map((repo) => {
+            const isActive = activeRepo?.id === repo._id;
 
-                ${
-                  activeRepo === repo.repoId
-                    ? "bg-[#14171C] border-[#3B82F6] shadow-[0_0_12px_rgba(59,130,246,0.28)]"
-                    : "bg-[#14171C]/40 hover:bg-[#14171C]/80 border-transparent hover:border-[#24272E]"
+            const statusColor = {
+              ready: "text-green-400 bg-green-400/10",
+              importing: "text-yellow-400 bg-yellow-400/10",
+              error: "text-red-400 bg-red-400/10",
+            }[repo.status];
+
+            return (
+              <motion.div
+                key={repo._id}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() =>
+                  setActiveRepo({
+                    id: repo._id,
+                    name: repo.repoName,
+                  })
                 }
-              `}
-            >
-              <GitBranch size={16} className="text-[#3B82F6]" />
-              <span className="text-sm font-medium truncate">
-                {repo.repoName}
-              </span>
-            </motion.div>
-          ))}
+                className={`
+                  p-4 rounded-xl cursor-pointer border
+                  bg-[#13161A]/50 hover:bg-[#15191f]
+                  transition-all duration-200 flex flex-col gap-2
+
+                  ${
+                    isActive
+                      ? "border-[#3B82F6] shadow-[0_0_15px_rgba(59,130,246,0.35)]"
+                      : "border-[#1f2226]/50 hover:border-[#2a2e33]"
+                  }
+                `}
+              >
+                {/* Top: Name */}
+                <div className="flex items-center gap-2">
+                  <FolderGit2 size={18} className="text-[#3B82F6]" />
+                  <p className="text-[15px] font-medium truncate">
+                    {repo.repoName}
+                  </p>
+                </div>
+
+                {/* Middle: Branch + Status */}
+                <div className="flex items-center justify-between">
+                  {/* Branch */}
+                  <div className="flex items-center gap-1.5 text-gray-400 text-xs">
+                    <GitBranch size={13} />
+                    {repo.branch || "main"}
+                  </div>
+
+                  {/* Status badge */}
+                  <span
+                    className={`
+                      text-[10px] px-2 py-0.5
+                      rounded-full font-semibold tracking-wide
+                      ${statusColor}
+                    `}
+                  >
+                    {repo.status}
+                  </span>
+                </div>
+
+                {/* Bottom: File count */}
+                {repo.fileCount !== undefined && (
+                  <div className="flex items-center gap-1.5 text-gray-500 text-[11px]">
+                    <FileCode size={12} />
+                    {repo.fileCount} files indexed
+                  </div>
+                )}
+              </motion.div>
+            );
+          })}
       </div>
 
-      {/* PROFILE SECTION */}
-      <div className="px-4 pb-4">
-        <div
+      {/* Profile Section */}
+      <div className="px-4 pb-6">
+        <motion.div
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
           onClick={() => setOpenProfile(true)}
           className="
-            flex items-center gap-3 px-3 py-2
-            rounded-xl cursor-pointer
-            hover:bg-[#14171C] transition-all duration-200
-            border border-transparent hover:border-[#24272E]
+            p-3 rounded-xl cursor-pointer transition-all
+            flex items-center justify-between
+            bg-[#13161B]/60 hover:bg-[#171b20]
+            border border-[#24272E]/50 hover:border-[#2E3239]
+            shadow-sm
           "
         >
-          <img
-            src={user?.avatar}
-            alt="profile"
-            className="w-9 h-9 rounded-full border border-[#22262c]"
-          />
-          <div className="flex flex-col">
-            <span className="text-sm">{user?.name}</span>
-            <span className="text-xs text-gray-500">Profile</span>
+          {/* Left: Avatar + name */}
+          <div className="flex items-center gap-3">
+            <img
+              src={user?.avatar}
+              className="
+                w-10 h-10 rounded-xl object-cover
+                border border-[#22262c] shadow-sm
+              "
+            />
+            <div className="leading-tight">
+              <p className="text-sm font-medium">{user?.name}</p>
+              <p className="text-[11px] text-gray-500">View Profile</p>
+            </div>
           </div>
-        </div>
+
+          {/* Right arrow */}
+          <svg
+            width="16"
+            height="16"
+            stroke="#3B82F6"
+            strokeWidth="2"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M5 3l6 5-6 5" />
+          </svg>
+        </motion.div>
       </div>
 
-      {/* PROFILE MODAL */}
+      {/* Profile Modal */}
       <AnimatePresence>
         {openProfile && (
           <motion.div
+            onClick={() => setOpenProfile(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-end justify-center z-50"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/50 flex items-end justify-center z-50"
-            onClick={() => setOpenProfile(false)}
           >
             <motion.div
-              initial={{ y: 200, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 200, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 130, damping: 18 }}
-              className="
-                w-full max-w-sm bg-[#0F1115]/95 border border-[#1c1f24]
-                backdrop-blur-xl rounded-t-3xl p-6 shadow-xl
-              "
               onClick={(e) => e.stopPropagation()}
+              initial={{ y: 180 }}
+              animate={{ y: 0 }}
+              exit={{ y: 200 }}
+              transition={{ type: "spring", stiffness: 120, damping: 15 }}
+              className="
+                w-full max-w-sm
+                bg-[#0C0D10]/95 border border-[#1c1f24]
+                rounded-t-3xl p-7 shadow-2xl backdrop-blur-xl
+              "
             >
-              <h2 className="text-lg font-semibold mb-4 tracking-tight">Account</h2>
+              <h2 className="text-lg font-semibold mb-4">Account</h2>
 
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-4 mb-8">
                 <img
                   src={user?.avatar}
-                  className="w-12 h-12 rounded-full border border-[#22262c]"
+                  className="w-14 h-14 rounded-xl border border-[#22262c]"
                 />
                 <div>
-                  <h3 className="font-medium">{user?.name}</h3>
-                  <p className="text-gray-400 text-sm">{user?.email}</p>
+                  <p className="text-base font-medium">{user?.name}</p>
+                  <p className="text-gray-500 text-sm">Logged in</p>
                 </div>
               </div>
 
@@ -127,13 +212,14 @@ export default function LeftSidebar() {
                 onClick={logout}
                 className="
                   w-full flex items-center justify-center gap-3 px-4 py-3
-                  rounded-xl bg-[#14171C] hover:bg-[#1a1f24]
-                  transition-all border border-[#24272E]
-                  text-sm font-medium
+                  rounded-xl bg-[#14171C]
+                  hover:bg-[#1a1f24]
+                  border border-[#24272E]
+                  text-sm font-medium transition-all
                 "
               >
                 <LogOut size={18} className="text-[#3B82F6]" />
-                Logout
+                Sign Out
               </button>
             </motion.div>
           </motion.div>

@@ -1,10 +1,10 @@
 
 import Chat from "../components/Chat";
-
-// TEMP until RepoContext added
-const activeRepo = null;
+import { useRepo } from "../context/RepoContext";
 
 export default function Dashboard() {
+  const { activeRepo } = useRepo();   // <-- get active repo from context
+
   return (
     <div className="h-full w-full">
       <Chat activeRepo={activeRepo} />
