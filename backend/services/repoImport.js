@@ -1,4 +1,5 @@
 
+
 // backend/services/repoImport.js
 
 import axios from "axios";
@@ -9,13 +10,14 @@ import File from "../models/File.js";
 import Embedding from "../models/Embedding.js";
 
 import {
-  generateEmbedding,
-  countTokens,
+  generateEmbedding,   // now dual model aware
   chunkText,
+  countTokens,
+  isCode
 } from "./ragUtils.js";
 
 /* -----------------------------------------------------------
-   SAFE SHA256
+   SHA256 Utility
 ----------------------------------------------------------- */
 function sha256(value) {
   return crypto.createHash("sha256").update(String(value)).digest("hex");
@@ -35,33 +37,20 @@ function parseRepoUrl(repoUrl) {
 }
 
 /* -----------------------------------------------------------
-   FIXED BINARY DETECTION
+   Binary Detection
 ----------------------------------------------------------- */
 function isBinaryContent(content) {
   if (!content) return true;
-
-  // If GitHub returns an object → it's parsed JSON → NOT binary
   if (typeof content !== "string") return false;
-
-  // Null bytes → real binary
   if (content.includes("\u0000")) return true;
-
-  return false; // keep everything else
+  return false;
 }
 
 /* -----------------------------------------------------------
-   FILE EXTENSION HANDLING
+   File Filters
 ----------------------------------------------------------- */
-
-const TEXT_EXT = [
-  "js","jsx","ts","tsx",
-  "json","md","txt","html","css","scss",
-  "yaml","yml","xml","env"
-];
-
 const BINARY_EXT_REGEX =
-  /\.(png|jpe?g|gif|svg|mp4|zip|gz|exe|dll|pdf|mov|avi|mp3|wav|ttf|otf)$/i;
-
+  /\.(png|jpe?g|gif|svg|mp4|mp3|wav|zip|gz|exe|dll|pdf|mov|avi|ttf|otf)$/i;
 
 /* ===================================================================
    MAIN IMPORT PIPELINE
@@ -76,56 +65,60 @@ export async function importRepository({
   let repoId = null;
 
   try {
-    /* STEP 1 — Parse */
+    /* ------------------------------------------
+       STEP 1 → Parse Repo
+    ------------------------------------------ */
     const { owner, repo } = parseRepoUrl(repoUrl);
 
-    /* STEP 2 — Fetch metadata */
+    /* ------------------------------------------
+       STEP 2 → Metadata
+    ------------------------------------------ */
     const meta = await axios
       .get(`https://api.github.com/repos/${owner}/${repo}`, {
         headers: { Authorization: `Bearer ${githubToken}` },
       })
       .catch(() => {
-        throw new Error("GitHub repo not found or not accessible");
+        throw new Error("GitHub repo not found or access denied.");
       });
 
     const repoMeta = meta.data;
     const branch = repoMeta.default_branch;
 
-    /* Check duplicates */
-    repoDoc = await Repo.findOne({
+    let existing = await Repo.findOne({
       user: userId,
       repoId: repoMeta.id,
       status: "ready",
     });
 
-    if (repoDoc) {
+    if (existing) {
       return {
         success: false,
         alreadyImported: true,
-        repoId: repoDoc._id,
-        message: "Repository already imported.",
+        repoId: existing._id,
       };
     }
 
-    /* Pending repo created earlier */
+    /* ------------------------------------------
+       STEP 3 → Locate pending temporary repo
+    ------------------------------------------ */
     repoDoc = await Repo.findOne({
       user: userId,
       status: "pending",
     }).sort({ createdAt: -1 });
 
-    if (!repoDoc) throw new Error("Temp repo not found");
+    if (!repoDoc) throw new Error("Temporary repo entry missing");
 
-    /* Fill metadata */
     repoDoc.repoId = repoMeta.id;
     repoDoc.repoName = `${owner}/${repo}`;
     repoDoc.branch = branch;
     repoDoc.status = "importing";
-    repoDoc.indexedFiles = 0;
     await repoDoc.save();
 
     repoId = repoDoc._id.toString();
 
-    /* STEP 3 — Fetch tree */
+    /* ------------------------------------------
+       STEP 4 → Fetch Repo Tree
+    ------------------------------------------ */
     const tree = await axios
       .get(
         `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
@@ -138,19 +131,16 @@ export async function importRepository({
       if (f.path.startsWith(".")) return false;
       if (f.path.includes("node_modules")) return false;
       if (f.path.includes("dist") || f.path.includes("build")) return false;
-
-      const ext = f.path.split(".").pop()?.toLowerCase() || "";
-
       if (BINARY_EXT_REGEX.test(f.path)) return false;
-
-      return true; // accept everything else as text
+      return true;
     });
 
     repoDoc.fileCount = codeFiles.length;
+    repoDoc.indexedFiles = 0;
     await repoDoc.save();
 
     /* ===================================================================
-       STEP 4 — Process files
+       STEP 5 → Process Files
     ==================================================================== */
     for (let i = 0; i < codeFiles.length; i++) {
       const filePath = codeFiles[i].path;
@@ -164,49 +154,43 @@ export async function importRepository({
         percent: Math.round((i / codeFiles.length) * 100),
       });
 
-      /* Fetch RAW text ALWAYS */
+      /* Fetch raw text */
       const raw = await axios
         .get(
           `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`,
           {
             headers: {
               Authorization: `Bearer ${githubToken}`,
-              Accept: "application/vnd.github.v3.raw", // 🔥 force raw text
+              Accept: "application/vnd.github.v3.raw",
             },
             responseType: "text",
-            transformResponse: (d) => d, // 🔥 prevent JSON auto-parse
+            transformResponse: (d) => d,
           }
         )
         .then((r) => r.data)
         .catch(() => null);
 
       if (!raw || isBinaryContent(raw)) {
-        console.log("⏭️ Skip binary:", filePath);
+        console.log("⏭️ Skipping binary:", filePath);
         continue;
       }
 
       const hash = sha256(raw);
 
-      /* Create/update file doc */
-      let fileDoc = await File.findOne({
-        repoId: repoDoc._id,
-        filePath,
-      });
+      let fileDoc = await File.findOne({ repoId: repoDoc._id, filePath });
 
       let changed = false;
-
       if (!fileDoc) {
         fileDoc = await File.create({
           repoId: repoDoc._id,
           filePath,
-          extension: filePath.split(".").pop(),
+          extension: filePath.split(".").pop() || "",
           content: raw,
           hash,
           tokens: countTokens(raw),
         });
         changed = true;
-      } 
-      else if (fileDoc.hash !== hash) {
+      } else if (fileDoc.hash !== hash) {
         fileDoc.content = raw;
         fileDoc.hash = hash;
         fileDoc.tokens = countTokens(raw);
@@ -214,7 +198,7 @@ export async function importRepository({
         changed = true;
       }
 
-      /* Embedding only when changed */
+      /* Recompute chunks only if file changed */
       if (changed) {
         await Embedding.deleteMany({ fileId: fileDoc._id });
 
@@ -222,6 +206,7 @@ export async function importRepository({
 
         for (let ci = 0; ci < chunks.length; ci++) {
           const chunk = chunks[ci];
+          if (!chunk.trim()) continue; // ignore empty chunks
 
           sendProgress(repoId, {
             type: "CHUNK_PROGRESS",
@@ -233,15 +218,23 @@ export async function importRepository({
             ),
           });
 
-          const emb = await generateEmbedding(chunk);
+          /* Dual embedding logic here */
+          const embedding = await generateEmbedding(chunk);
+
+          if (!embedding) {
+            console.log("❌ Skipped chunk with failed embedding.");
+            continue;
+          }
 
           await Embedding.create({
             repoId: repoDoc._id,
             fileId: fileDoc._id,
             chunkIndex: ci,
             content: chunk,
-            embedding: emb,
+            embedding,
+            model: isCode(chunk) ? "mxbai-embed-large" : "nomic-embed-text",
             hash: sha256(chunk),
+            tokenCount: countTokens(chunk),
           });
         }
       }
@@ -252,28 +245,30 @@ export async function importRepository({
       sendProgress(repoId, {
         type: "FILE_DONE",
         file: filePath,
-        filePercent: 100,
         overallPercent: Math.round((fileIndex / codeFiles.length) * 100),
       });
     }
 
+    /* Finalize Repo */
     repoDoc.status = "ready";
     await repoDoc.save();
 
     sendProgress(repoId, { type: "DONE", progress: 100 });
-
     return { success: true, repoId };
-  } 
-  catch (err) {
-    console.error("❌ Repo Import Error:", err);
 
-    if (sendProgress && repoId) {
-      sendProgress(repoId, { type: "ERROR", message: err.message });
-    }
+  } catch (err) {
+    console.error("❌ Repo Import Error:", err);
 
     if (repoDoc) {
       repoDoc.status = "error";
       await repoDoc.save();
+    }
+
+    if (repoId && sendProgress) {
+      sendProgress(repoId, {
+        type: "ERROR",
+        message: err.message,
+      });
     }
 
     return { success: false, message: err.message };

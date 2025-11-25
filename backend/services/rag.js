@@ -2,112 +2,123 @@
 
 // backend/services/rag.js
 
-import Embedding from "../models/Embedding.js";
 import File from "../models/File.js";
 import Repo from "../models/Repo.js";
+import {
+  searchSimilarChunks,
+  fetchFileById
+} from "./vector.js";
+
+import { ensureText, isCode } from "./ragUtils.js";
 import axios from "axios";
-import { ensureText, generateEmbedding } from "./ragUtils.js";
 
 /* ============================================================================
-   0. Debug Wrapper
+   LOGGING
 ============================================================================= */
 function log(...args) {
   console.log("🔍 [RAG]", ...args);
 }
 
 /* ============================================================================
-   1. GET TOP MATCHING CHUNKS (VECTOR SEARCH)
+   1. HYBRID RETRIEVAL WRAPPER
 ============================================================================= */
 export async function retrieveRelevantChunks({ repoId, query, topK = 6 }) {
-  log(`Vector search started for repo=${repoId}`);
+  log("🔎 Hybrid Retrieval Started...");
 
-  const cleanQuery = ensureText(query);
-  if (!cleanQuery) {
-    log("❌ Query invalid after ensureText()");
+  const clean = ensureText(query);
+  if (!clean) return [];
+
+  const chunks = await searchSimilarChunks({ repoId, query: clean, topK });
+
+  if (!chunks.length) {
+    log("⚠ No chunks returned by hybrid search");
     return [];
   }
 
-  log("Generating query embedding...");
-  const queryEmbedding = await generateEmbedding(cleanQuery);
-
-  if (!queryEmbedding) {
-    log("❌ Query embedding failed");
-    return [];
-  }
-  log("Query embedding length:", queryEmbedding.length);
-
-  // Fetch embeddings
-  log("Fetching repo embeddings...");
-  const embeddings = await Embedding.find({ repoId }).lean();
-
-  if (embeddings.length === 0) {
-    log("⚠ No embeddings indexed for this repo");
-    return [];
-  }
-  log(`Found ${embeddings.length} vector chunks`);
-
-  // Compute similarity
-  const scored = embeddings.map((emb) => {
-    const vec = emb.embedding;
-    const score = cosineSimilarity(queryEmbedding, vec);
-    return { ...emb, score };
-  });
-
-  // Sort & slice
-  scored.sort((a, b) => b.score - a.score);
-  const topChunks = scored.slice(0, topK);
-
-  log("Top K Scores:", topChunks.map((c) => c.score.toFixed(3)));
-
-  return topChunks;
+  log(`📌 Retrieved Top ${chunks.length} Chunks`);
+  return chunks;
 }
 
 /* ============================================================================
-   2. COSINE SIMILARITY
+   2. GROUP CHUNKS BY FILE
 ============================================================================= */
-function cosineSimilarity(a, b) {
-  if (!a || !b || a.length !== b.length) return 0;
+async function groupChunksByFile(chunks) {
+  const grouped = {};
 
-  let dot = 0, magA = 0, magB = 0;
+  for (const c of chunks) {
+    try {
+      const file = await fetchFileById(c.fileId);
+      const name = file?.filePath || "unknown_file";
 
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    magA += a[i] ** 2;
-    magB += b[i] ** 2;
+      if (!grouped[name]) grouped[name] = [];
+      grouped[name].push(c);
+    } catch {
+      continue;
+    }
   }
 
-  return dot / (Math.sqrt(magA) * Math.sqrt(magB) + 1e-8);
+  return grouped;
 }
 
 /* ============================================================================
-   3. BUILD PROMPT (Improved Formatting)
+   3. BUILD CONTEXT WITH SMART CODE LINKING
+============================================================================= */
+function extractFunctionNames(text) {
+  const names = [];
+  const patterns = [
+    /function\s+(\w+)/g,
+    /const\s+(\w+)\s*=\s*\(/g,
+    /class\s+(\w+)/g,
+    /def\s+(\w+)/g,
+  ];
+
+  for (const p of patterns) {
+    let m;
+    while ((m = p.exec(text))) names.push(m[1]);
+  }
+  return names;
+}
+
+/* ============================================================================
+   4. BUILD PROMPT
 ============================================================================= */
 export async function buildPrompt({ query, chunks }) {
-  log("Building final LLM prompt...");
+  log("📝 Building prompt...");
 
-  let formattedChunks = "";
+  const grouped = await groupChunksByFile(chunks);
 
-  for (let i = 0; i < chunks.length; i++) {
-    const c = chunks[i];
+  let fullContext = "";
+  let allLinkedFunctions = new Set();
 
-    const fileInfo = await File.findById(c.fileId).lean();
-    const fileName = fileInfo?.filePath || "unknown_file";
-
-    formattedChunks += `
--------------------------------
-🔹 CHUNK ${i + 1}
+  for (const [fileName, fileChunks] of Object.entries(grouped)) {
+    fullContext += `
+================================================================================
 📄 FILE: ${fileName}
-⭐ SCORE: ${c.score.toFixed(3)}
--------------------------------
+================================================================================
+`;
+
+    for (const c of fileChunks) {
+      const fnNames = extractFunctionNames(c.content);
+      fnNames.forEach((n) => allLinkedFunctions.add(n));
+
+      fullContext += `
+-----------------------------
+🔹 CHUNK (score ${c.score.toFixed(3)})
+-----------------------------
 ${c.content}
 `;
+    }
   }
 
+  const fnList = [...allLinkedFunctions]
+    .map((f) => `- ${f}`)
+    .join("\n");
+
   return `
-You are a senior software engineer assistant.
+You are an expert software engineer.  
 Answer ONLY using the context from the repository.
 
-If the answer is not found in the provided context, reply:
+If the answer is not in context, reply:
 "I cannot find this in the repository."
 
 ================================================================================
@@ -115,23 +126,33 @@ USER QUESTION:
 ${query}
 ================================================================================
 
-CONTEXT FROM REPOSITORY:
-${formattedChunks}
+🔍 DETECTED CONTEXT FUNCTIONS:
+${fnList || "None found"}
+================================================================================
+
+📦 CONTEXT FROM REPOSITORY:
+${fullContext}
 
 ================================================================================
-Provide a concise, accurate, and technically correct response.
-Use bullet points and code blocks when helpful.
+INSTRUCTIONS FOR ANSWER:
+- If user asks about a function → show definition, purpose, flow
+- Include related helper functions found in same file
+- Provide code excerpts when necessary
+- Be concise but technically accurate
+- DO NOT hallucinate functions or behavior not shown in context
+================================================================================
 `;
 }
 
 /* ============================================================================
-   4. STREAM OLLAMA RESPONSE WITH BETTER LOGGING
+   5. STREAM OLLAMA RESPONSE
 ============================================================================= */
-
-// backend/services/rag.js
-
-export async function streamOllamaResponse({ model = "qwen2.5-coder:7b", prompt, sendToken }) {
-  log("Starting Ollama streaming via /api/chat ...");
+export async function streamOllamaResponse({
+  model = "qwen2.5-coder:7b",
+  prompt,
+  sendToken,
+}) {
+  log("📨 Streaming model response...");
 
   try {
     const res = await axios({
@@ -141,92 +162,77 @@ export async function streamOllamaResponse({ model = "qwen2.5-coder:7b", prompt,
       data: {
         model,
         messages: [{ role: "user", content: prompt }],
-        stream: true
-      }
+        stream: true,
+      },
     });
 
     let buffer = "";
-    let lastToken = "";  // <— prevents duplicates
+    let lastToken = "";
 
     res.data.on("data", (chunk) => {
       buffer += chunk.toString();
 
-      // Split JSON lines
       const lines = buffer.split("\n");
-      buffer = lines.pop(); // keep last incomplete line
+      buffer = lines.pop();
 
       for (const line of lines) {
         if (!line.trim()) continue;
 
         try {
           const json = JSON.parse(line);
+          const token = json.message?.content;
 
-          if (json.message?.content) {
-            const token = json.message.content;
-
-            // Prevent duplicate token chunks
-            if (token === lastToken) continue;
+          if (token && token !== lastToken) {
             lastToken = token;
-
             sendToken(token);
           }
-        } catch (e) {
-          log("⚠ JSON parse error:", line);
-        }
+        } catch {}
       }
     });
 
     return new Promise((resolve) => {
       res.data.on("end", () => {
-        log("Ollama stream finished");
+        log("✅ Stream finished");
         resolve();
       });
     });
-
   } catch (err) {
-    log("❌ Ollama Chat Error:", err.message);
-    sendToken("[ERROR: Ollama failed to stream response]");
+    log("❌ Streaming Error:", err.message);
+    sendToken("[ERROR: Failed to stream response]");
   }
 }
 
-
-
-
-// ============================================================================
-// 5. MAIN RAG PIPELINE (with Big Debug Logs)
-// ============================================================================
+/* ============================================================================
+   6. MAIN RAG PIPELINE
+============================================================================= */
 export async function runRAG({ repoId, query, sendToken }) {
   try {
-    log("🚀 RAG Pipeline started");
+    log("🚀 RAG Pipeline BEGIN");
     log("Repo:", repoId);
     log("Query:", query);
 
-    // Retrieve best chunks
-    const chunks = await retrieveRelevantChunks({ repoId, query, topK: 6 });
+    const chunks = await retrieveRelevantChunks({
+      repoId,
+      query,
+      topK: 6,
+    });
 
-    if (chunks.length === 0) {
-      log("⚠ No matching chunks found");
+    if (!chunks.length) {
       sendToken("I cannot find anything related to this in the repository.");
       return;
     }
 
-    // Build prompt
     const prompt = await buildPrompt({ query, chunks });
 
-    log("Prompt built. Prompt length:", prompt.length);
-
-    // Stream final answer using correct model
     await streamOllamaResponse({
-      model: "qwen2.5-coder:7b",     // ✅ FIXED HERE
+      model: "qwen2.5-coder:7b",
       prompt,
       sendToken,
     });
 
-    log("RAG Pipeline finished.");
-
+    log("🏁 RAG Pipeline COMPLETE");
   } catch (err) {
-    log("❌ RAG Error:", err);
+    log("❌ RAG Pipeline Error:", err.message);
     sendToken("[RAG ERROR] " + err.message);
   }
 }
-
