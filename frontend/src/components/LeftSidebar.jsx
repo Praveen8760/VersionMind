@@ -79,7 +79,7 @@ export default function LeftSidebar() {
                 }
                 className={`
                   p-4 rounded-xl cursor-pointer border
-                  bg-[#13161A]/50 hover:bg-[#15191f]
+                  bg-[#13161A]/50 hover:bg-[#15191f] mt-3
                   transition-all duration-200 flex flex-col gap-2
 
                   ${

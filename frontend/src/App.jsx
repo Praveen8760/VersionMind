@@ -7,6 +7,7 @@ import MainLayout from "./layouts/MainLayout";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { RepoProvider } from "./context/RepoContext";
 import { RepoImportProvider } from "./context/RepoImportContext";
+import { ChatProvider } from "./context/ChatContext";   // ✅ ADD THIS
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -28,20 +29,19 @@ export default function App() {
       <BrowserRouter>
         <Routes>
 
-          {/* PUBLIC */}
           <Route path="/login" element={<Login />} />
 
-          {/* PROTECTED */}
           <Route
             path="/dashboard"
             element={
               <ProtectedRoute>
-                {/* Repo context loads ONLY after user is authenticated */}
                 <RepoProvider>
                   <RepoImportProvider>
-                    <MainLayout>
-                      <Dashboard />
-                    </MainLayout>
+                    <ChatProvider>  {/* ✅ FIXED: WRAP HERE */}
+                      <MainLayout>
+                        <Dashboard />
+                      </MainLayout>
+                    </ChatProvider>
                   </RepoImportProvider>
                 </RepoProvider>
               </ProtectedRoute>
@@ -49,7 +49,6 @@ export default function App() {
           />
 
           <Route path="*" element={<Navigate to="/login" replace />} />
-
         </Routes>
       </BrowserRouter>
     </AuthProvider>

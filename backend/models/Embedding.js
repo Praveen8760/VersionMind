@@ -1,3 +1,6 @@
+
+// backend/models/Embedding.js
+
 import mongoose from "mongoose";
 
 const embeddedSchema = new mongoose.Schema(

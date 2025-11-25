@@ -1,4 +1,7 @@
 
+
+// backend/model/File.js
+
 import mongoose from "mongoose";
 
 const fileSchema = new mongoose.Schema(
