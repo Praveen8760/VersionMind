@@ -1,11 +1,15 @@
 
+
 // src/components/RepoImportProgress.jsx
 
 import { motion } from "framer-motion";
-import { Loader2, FileCode, SquareStack } from "lucide-react";
+import { Loader2, FileCode, FileText, SquareStack, Brain } from "lucide-react";
 
 export default function RepoImportProgress({ progress }) {
   if (!progress) return null;
+
+  const isCode = progress.isCode || false;
+  const modelName = progress.model || (isCode ? "mxbai-embed-large" : "nomic-embed-text");
 
   return (
     <motion.div
@@ -32,12 +36,25 @@ export default function RepoImportProgress({ progress }) {
       {/* FILE NAME */}
       {progress.file && (
         <div className="flex items-center gap-2 my-1 text-gray-400">
-          <FileCode size={14} className="text-gray-500" />
-          <p className="text-xs truncate text-gray-300">
+          {isCode ? (
+            <FileCode size={14} className="text-blue-400" />
+          ) : (
+            <FileText size={14} className="text-green-400" />
+          )}
+
+          <p className="text-xs truncate text-gray-300 max-w-[85%]">
             {progress.file}
           </p>
         </div>
       )}
+
+      {/* MODEL INFO */}
+      <div className="flex items-center gap-2 mb-1 mt-1">
+        <Brain size={14} className="text-purple-400" />
+        <p className="text-[11px] text-gray-400">
+          Using model: <span className="text-gray-300">{modelName}</span>
+        </p>
+      </div>
 
       {/* CHUNK + FILE ROW */}
       <div className="flex justify-between mt-1 mb-3">
@@ -59,29 +76,23 @@ export default function RepoImportProgress({ progress }) {
 
       {/* PROGRESS BAR */}
       <div className="w-full bg-[#0c0d11] h-3 rounded-lg overflow-hidden relative shadow-inner">
-        {/* Background Glow */}
         <div className="absolute inset-0 bg-gradient-to-r from-[#1e2633] to-[#111318] opacity-60" />
 
-        {/* Animated Fill */}
         <motion.div
           animate={{ width: `${progress.percent}%` }}
           transition={{ duration: 0.35, ease: "easeOut" }}
-          className="
+          className={`
             h-full rounded-lg relative
             bg-gradient-to-r 
-            from-[#2563EB] 
-            via-[#3B82F6] 
-            to-[#60A5FA]
-          "
+            ${isCode 
+              ? "from-blue-600 via-blue-400 to-blue-300"
+              : "from-green-600 via-green-400 to-green-300"}
+          `}
         >
-          {/* Soft moving shine */}
           <motion.div
             animate={{ x: ["-20%", "120%"] }}
             transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}
-            className="
-              absolute top-0 bottom-0 w-10 
-              bg-white/25 blur-md opacity-30 
-            "
+            className="absolute top-0 bottom-0 w-10 bg-white/25 blur-md opacity-30"
           />
         </motion.div>
       </div>

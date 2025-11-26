@@ -1,71 +1,91 @@
 
+
 // backend/routes/sse.js
 
 import express from "express";
 const router = express.Router();
 
-// Store SSE clients by repoId
+// Store connected clients (one per repo import process)
 global.sseClients = global.sseClients || {};
 
-/* -------------------------------------------------------
-   SAFE GLOBAL PROGRESS PUSHER
-------------------------------------------------------- */
-global.sendProgress = (repoId, data) => {
+/* ============================================================================
+   SAFE GLOBAL PROGRESS EMITTER
+============================================================================ */
+global.sendProgress = (repoId, data = {}) => {
   const client = global.sseClients[repoId];
 
-  if (!client) return;               // No SSE connection
-  if (client.finished) return;       // Response ended
-  if (client.destroyed) return;      // Socket closed
+  // No active SSE connection
+  if (!client) return;
+
+  // Avoid writing to closed stream
+  if (client.finished || client.destroyed) return;
 
   try {
     client.write(`data: ${JSON.stringify(data)}\n\n`);
   } catch (err) {
-    console.error("❌ SSE write failed for", repoId, err.message);
+    console.error(`❌ SSE write failed for repo ${repoId}:`, err.message);
   }
 };
 
-/* -------------------------------------------------------
+/* ============================================================================
    SSE ENDPOINT
-------------------------------------------------------- */
+============================================================================ */
 router.get("/repo-progress/:repoId", (req, res) => {
-  const repoId = req.params.repoId;
+  const { repoId } = req.params;
 
-  // ---- Required SSE headers ----
+  console.log("🔵 [SSE] Client connected for repo:", repoId);
+
+  /* -------------------------------------------------------
+     REQUIRED SSE HEADERS
+  ------------------------------------------------------- */
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");   // Disable buffering (Nginx)
+
+  // Allow frontend
   res.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");
   res.setHeader("Access-Control-Allow-Credentials", "true");
 
-  // Tell client: do not retry instantly
+  // Disable Nginx buffering (critical!)
+  res.setHeader("X-Accel-Buffering", "no");
+
+  // Tell EventSource to wait 3 seconds before reconnect attempts
   res.write("retry: 3000\n\n");
 
-  console.log("🔵 SSE connected:", repoId);
-
+  /* -------------------------------------------------------
+     Register this client under repoId
+  ------------------------------------------------------- */
   global.sseClients[repoId] = res;
 
-  // ---- Send heartbeat ----
+  /* -------------------------------------------------------
+     Send periodic heartbeats
+  ------------------------------------------------------- */
   const heartbeat = setInterval(() => {
     try {
-      res.write(": ping\n\n");
+      res.write(": heartbeat\n\n");
     } catch {
-      // Client is probably disconnected
+      console.log("⚠ SSE heartbeat failed for:", repoId);
     }
   }, 15000);
 
-  // ---- Handle disconnect ----
+  /* -------------------------------------------------------
+     Cleanup when the client disconnects
+  ------------------------------------------------------- */
   req.on("close", () => {
-    console.log("🔴 SSE closed:", repoId);
+    console.log("🔴 [SSE] Connection closed for repo:", repoId);
 
     clearInterval(heartbeat);
 
-    // Cleanup safely
-    if (global.sseClients[repoId]) delete global.sseClients[repoId];
+    // Close & cleanup client map
+    if (global.sseClients[repoId]) {
+      delete global.sseClients[repoId];
+    }
 
     try {
       res.end();
-    } catch {}
+    } catch {
+      // Already closed
+    }
   });
 });
 

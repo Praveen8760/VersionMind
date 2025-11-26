@@ -1,13 +1,31 @@
 
+
 // src/components/Chat.jsx
 
 import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, UploadCloud } from "lucide-react";
+import { Send, Bot, User, UploadCloud, FileCode2, Brackets } from "lucide-react";
 
 import { useChat } from "../context/ChatContext";
 import { useRepoImport } from "../context/RepoImportContext";
 import RepoImportProgress from "./RepoImportProgress";
+
+/* ------------------------------------------------------
+   🔵 Markdown / Code formatter
+------------------------------------------------------ */
+function renderMessage(text) {
+  if (!text) return "";
+
+  // Wrap inline code
+  text = text.replace(/`([^`]+)`/g, "<code class='inline-code'>$1</code>");
+
+  // Wrap code blocks
+  text = text.replace(/```([\s\S]*?)```/g, (m, code) => {
+    return `<pre class="code-block"><code>${code}</code></pre>`;
+  });
+
+  return text;
+}
 
 export default function Chat({ activeRepo }) {
   const [input, setInput] = useState("");
@@ -52,6 +70,39 @@ export default function Chat({ activeRepo }) {
     }
   };
 
+  /* ----------------------------------------------------------
+      CLICKABLE UI HELPERS (Open File + Jump to Function)
+  ----------------------------------------------------------- */
+  const handleOpenFile = (filePath) => {
+    alert(`TODO: Open file viewer for: ${filePath}`);
+  };
+
+  const handleJumpToFunction = (fn) => {
+    alert(`TODO: Scroll to function definition: ${fn}`);
+  };
+
+  /* ----------------------------------------------------------
+      PARSE LINKED FILE/FUNCTION TAGS FROM BACKEND
+      backend will send:
+      { file:"src/app.js", fn:"add", text:"..." }
+  ----------------------------------------------------------- */
+  const extractLinkedMeta = (msg) => {
+    const meta = {};
+
+    if (msg.text.includes("FILE: ")) {
+      const match = msg.text.match(/FILE:\s*(.+)/);
+      if (match) meta.file = match[1].trim();
+    }
+
+    if (msg.text.includes("function ")) {
+      // naive match - backend already grouped functions
+      const fn = msg.text.match(/function\s+(\w+)/);
+      if (fn) meta.fn = fn[1];
+    }
+
+    return meta;
+  };
+
   /* --------------------------------------------
      RENDER UI
   --------------------------------------------- */
@@ -65,7 +116,7 @@ export default function Chat({ activeRepo }) {
           scrollbar-thin scrollbar-thumb-[#1c1e24] scrollbar-track-transparent
         "
       >
-        {/* ---------- EMPTY STATE (No Active Repo) ---------- */}
+        {/* ---------- EMPTY STATE ---------- */}
         {!activeRepo && mode === "chat" && (
           <motion.div
             initial={{ opacity: 0, y: 25 }}
@@ -99,6 +150,7 @@ export default function Chat({ activeRepo }) {
         <AnimatePresence mode="popLayout">
           {messages.map((msg, index) => {
             const isUser = msg.sender === "user";
+            const meta = extractLinkedMeta(msg);
 
             return (
               <motion.div
@@ -134,7 +186,34 @@ export default function Chat({ activeRepo }) {
                     }
                   `}
                 >
-                  {msg.text}
+                  {/* Render formatted HTML */}
+                  <div
+                    className="prose prose-invert text-gray-200"
+                    dangerouslySetInnerHTML={{ __html: renderMessage(msg.text) }}
+                  />
+
+                  {/* --------- Metadata Buttons (file / functions) ---------- */}
+                  {!isUser && (
+                    <div className="flex gap-4 mt-3 text-xs">
+                      {meta.file && (
+                        <button
+                          onClick={() => handleOpenFile(meta.file)}
+                          className="flex items-center gap-1 text-blue-400 hover:underline"
+                        >
+                          <FileCode2 size={14} /> {meta.file}
+                        </button>
+                      )}
+
+                      {meta.fn && (
+                        <button
+                          onClick={() => handleJumpToFunction(meta.fn)}
+                          className="flex items-center gap-1 text-emerald-400 hover:underline"
+                        >
+                          <Brackets size={14} /> {meta.fn}()
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* USER AVATAR */}
@@ -190,7 +269,6 @@ export default function Chat({ activeRepo }) {
               transition={{ type: "spring", stiffness: 260, damping: 22 }}
             />
 
-            {/* Tabs */}
             <button
               onClick={() => setMode("chat")}
               className={`relative z-10 w-1/2 py-2 text-sm font-medium transition-all ${

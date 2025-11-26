@@ -3,44 +3,39 @@
 // backend/services/rag.js
 
 import File from "../models/File.js";
-import Repo from "../models/Repo.js";
+import FunctionNode from "../models/FunctionNode.js";
 import {
   searchSimilarChunks,
   fetchFileById
 } from "./vector.js";
 
-import { ensureText, isCode } from "./ragUtils.js";
+import { ensureText } from "./ragUtils.js";
 import axios from "axios";
 
 /* ============================================================================
    LOGGING
 ============================================================================= */
-function log(...args) {
-  console.log("🔍 [RAG]", ...args);
-}
+const log = (...args) => console.log("🔍 [RAG]", ...args);
 
 /* ============================================================================
-   1. HYBRID RETRIEVAL WRAPPER
+   1. INTENT DETECTION → "Explain add()", "What does login() do?"
 ============================================================================= */
-export async function retrieveRelevantChunks({ repoId, query, topK = 6 }) {
-  log("🔎 Hybrid Retrieval Started...");
-
-  const clean = ensureText(query);
-  if (!clean) return [];
-
-  const chunks = await searchSimilarChunks({ repoId, query: clean, topK });
-
-  if (!chunks.length) {
-    log("⚠ No chunks returned by hybrid search");
-    return [];
-  }
-
-  log(`📌 Retrieved Top ${chunks.length} Chunks`);
-  return chunks;
+function detectFunctionIntent(query) {
+  const regex = /([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)/; // matches foo(), bar()
+  const match = query.match(regex);
+  return match ? match[1] : null;
 }
 
 /* ============================================================================
-   2. GROUP CHUNKS BY FILE
+   2. FUNCTION GRAPH LOOKUP
+============================================================================= */
+async function fetchFunctionGraph(repoId, fnName) {
+  const node = await FunctionNode.findOne({ repoId, name: fnName }).lean();
+  return node || null;
+}
+
+/* ============================================================================
+   3. GROUP CHUNKS BY FILE
 ============================================================================= */
 async function groupChunksByFile(chunks) {
   const grouped = {};
@@ -48,116 +43,124 @@ async function groupChunksByFile(chunks) {
   for (const c of chunks) {
     try {
       const file = await fetchFileById(c.fileId);
-      const name = file?.filePath || "unknown_file";
+      const filePath = file?.filePath || "unknown_file";
 
-      if (!grouped[name]) grouped[name] = [];
-      grouped[name].push(c);
-    } catch {
-      continue;
-    }
+      if (!grouped[filePath]) grouped[filePath] = [];
+      grouped[filePath].push({ ...c, filePath });
+    } catch {}
   }
 
   return grouped;
 }
 
 /* ============================================================================
-   3. BUILD CONTEXT WITH SMART CODE LINKING
+   4. BUILD CONTEXT WITH LINE NUMBERS + FILE NAMES
 ============================================================================= */
-function extractFunctionNames(text) {
-  const names = [];
-  const patterns = [
-    /function\s+(\w+)/g,
-    /const\s+(\w+)\s*=\s*\(/g,
-    /class\s+(\w+)/g,
-    /def\s+(\w+)/g,
-  ];
-
-  for (const p of patterns) {
-    let m;
-    while ((m = p.exec(text))) names.push(m[1]);
-  }
-  return names;
+function applyLineNumbers(text) {
+  return text
+    .split("\n")
+    .map((line, idx) => `${String(idx + 1).padStart(4, " ")} | ${line}`)
+    .join("\n");
 }
 
 /* ============================================================================
-   4. BUILD PROMPT
+   5. BUILD PROMPT (Smart, function-aware)
 ============================================================================= */
-export async function buildPrompt({ query, chunks }) {
-  log("📝 Building prompt...");
+export async function buildPrompt({ repoId, query, chunks }) {
+  log("📝 Building final RAG prompt…");
 
-  const grouped = await groupChunksByFile(chunks);
+  const functionName = detectFunctionIntent(query);
+  let fnContext = "";
 
-  let fullContext = "";
-  let allLinkedFunctions = new Set();
+  if (functionName) {
+    log("📌 Function detected in query:", functionName);
 
-  for (const [fileName, fileChunks] of Object.entries(grouped)) {
-    fullContext += `
-================================================================================
-📄 FILE: ${fileName}
-================================================================================
-`;
+    const graphNode = await fetchFunctionGraph(repoId, functionName);
 
-    for (const c of fileChunks) {
-      const fnNames = extractFunctionNames(c.content);
-      fnNames.forEach((n) => allLinkedFunctions.add(n));
+    if (graphNode) {
+      fnContext = `
+===============================================================================
+📌 FUNCTION GRAPH — ${graphNode.name}
+===============================================================================
 
-      fullContext += `
------------------------------
-🔹 CHUNK (score ${c.score.toFixed(3)})
------------------------------
-${c.content}
+📄 FILE: ${graphNode.filePath}
+📍 Lines: ${graphNode.startLine} - ${graphNode.endLine}
+
+🔻 CALLS:
+${graphNode.calls.length ? graphNode.calls.map(f => " - " + f).join("\n") : " - None"}
+
+🔺 CALLED BY:
+${graphNode.calledBy.length ? graphNode.calledBy.map(f => " - " + f).join("\n") : " - None"}
+
 `;
     }
   }
 
-  const fnList = [...allLinkedFunctions]
-    .map((f) => `- ${f}`)
-    .join("\n");
+  const grouped = await groupChunksByFile(chunks);
+
+  let chunkContext = "";
+  for (const [filePath, fileChunks] of Object.entries(grouped)) {
+    chunkContext += `
+===============================================================================
+📄 FILE: ${filePath}
+===============================================================================
+`;
+
+    for (const c of fileChunks) {
+      const numbered = applyLineNumbers(c.content);
+
+      chunkContext += `
+-----------------------------
+🔹 CHUNK (score: ${c.score.toFixed(3)})
+-----------------------------
+${numbered}
+`;
+    }
+  }
 
   return `
-You are an expert software engineer.  
-Answer ONLY using the context from the repository.
+You are a senior software engineer assistant.
+Use ONLY the context provided below.
 
-If the answer is not in context, reply:
+If the answer is NOT in the context, respond exactly:
 "I cannot find this in the repository."
 
-================================================================================
+===============================================================================
 USER QUESTION:
 ${query}
-================================================================================
+===============================================================================
 
-🔍 DETECTED CONTEXT FUNCTIONS:
-${fnList || "None found"}
-================================================================================
+${fnContext}
 
-📦 CONTEXT FROM REPOSITORY:
-${fullContext}
+===============================================================================
+REPOSITORY CONTEXT:
+${chunkContext}
 
-================================================================================
-INSTRUCTIONS FOR ANSWER:
-- If user asks about a function → show definition, purpose, flow
-- Include related helper functions found in same file
-- Provide code excerpts when necessary
-- Be concise but technically accurate
-- DO NOT hallucinate functions or behavior not shown in context
-================================================================================
+===============================================================================
+INSTRUCTIONS:
+- If the question is about a function → give definition, purpose, flow
+- Reference exact line numbers
+- If helper functions exist in graph → explain them
+- Avoid hallucination completely
+- Use bullet points + code blocks when helpful
+===============================================================================
 `;
 }
 
 /* ============================================================================
-   5. STREAM OLLAMA RESPONSE
+   6. STREAM RESPONSE FROM OLLAMA
 ============================================================================= */
 export async function streamOllamaResponse({
   model = "qwen2.5-coder:7b",
   prompt,
   sendToken,
 }) {
-  log("📨 Streaming model response...");
+  log("📨 Streaming model response…");
 
   try {
     const res = await axios({
-      method: "POST",
       url: "http://localhost:11434/api/chat",
+      method: "POST",
       responseType: "stream",
       data: {
         model,
@@ -171,7 +174,6 @@ export async function streamOllamaResponse({
 
     res.data.on("data", (chunk) => {
       buffer += chunk.toString();
-
       const lines = buffer.split("\n");
       buffer = lines.pop();
 
@@ -190,48 +192,54 @@ export async function streamOllamaResponse({
       }
     });
 
-    return new Promise((resolve) => {
+    return new Promise((resolve) =>
       res.data.on("end", () => {
         log("✅ Stream finished");
         resolve();
-      });
-    });
+      })
+    );
   } catch (err) {
-    log("❌ Streaming Error:", err.message);
-    sendToken("[ERROR: Failed to stream response]");
+    log("❌ Stream Error:", err.message);
+    sendToken("[ERROR] Failed to generate response");
   }
 }
 
 /* ============================================================================
-   6. MAIN RAG PIPELINE
+   7. MAIN RAG PIPELINE
 ============================================================================= */
 export async function runRAG({ repoId, query, sendToken }) {
   try {
-    log("🚀 RAG Pipeline BEGIN");
-    log("Repo:", repoId);
+    log("🚀 RAG START");
     log("Query:", query);
 
-    const chunks = await retrieveRelevantChunks({
-      repoId,
-      query,
-      topK: 6,
-    });
+    const clean = ensureText(query);
+    if (!clean) {
+      sendToken("Invalid query.");
+      return;
+    }
+
+    // Hybrid vector search
+    const chunks = await searchSimilarChunks({ repoId, query: clean, topK: 8 });
 
     if (!chunks.length) {
       sendToken("I cannot find anything related to this in the repository.");
       return;
     }
 
-    const prompt = await buildPrompt({ query, chunks });
+    // Build final prompt
+    const prompt = await buildPrompt({ repoId, query: clean, chunks });
+    log("📌 Prompt built. Length:", prompt.length);
 
+    // Stream answer
     await streamOllamaResponse({
       model: "qwen2.5-coder:7b",
       prompt,
       sendToken,
     });
 
-    log("🏁 RAG Pipeline COMPLETE");
-  } catch (err) {
+    log("🏁 RAG END");
+  } 
+  catch (err) {
     log("❌ RAG Pipeline Error:", err.message);
     sendToken("[RAG ERROR] " + err.message);
   }

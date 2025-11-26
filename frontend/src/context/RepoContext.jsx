@@ -1,4 +1,6 @@
 
+
+// src/context/RepoContext.jsx
 import { createContext, useContext, useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth } from "./AuthContext";
@@ -9,114 +11,90 @@ export const RepoProvider = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
 
   const [repos, setRepos] = useState([]);
-  const [activeRepo, setActiveRepo] = useState(null); 
-  const [loadingRepos, setLoadingRepos] = useState(false);
-  const [error, setError] = useState(null);
+  const [activeRepo, setActiveRepo] = useState(null);
+
+  const [reposLoading, setReposLoading] = useState(true);
+  const [activeRepoLoading, setActiveRepoLoading] = useState(true);
 
   const api = axios.create({
     baseURL: "http://localhost:3000",
     withCredentials: true,
   });
 
-  /* ===========================================================
-     FETCH USER REPOS
-  =========================================================== */
+  /* ====================================================
+     FETCH USER REPOSITORIES
+  ==================================================== */
   const fetchRepos = async () => {
     if (!user) return;
 
-    try {
-      setLoadingRepos(true);
+    setReposLoading(true);
 
+    try {
       const res = await api.get("/api/repo/list");
       const items = res.data.repos || [];
-
       setRepos(items);
 
-      // Restore previously selected repo
+      // Restore active repo
       const saved = localStorage.getItem("activeRepo");
+
       if (saved) {
-        const found = items.find(r => r.repoId === saved);
+        const found = items.find((r) => r._id === saved);
         if (found) {
           setActiveRepo({
-            id: found.repoId,
-            name: found.repoName
+            id: found._id,
+            name: found.repoName,
+            githubId: found.repoId,
           });
         }
       }
-
-      setError(null);
     } catch (err) {
       console.error("❌ Failed to load repos:", err);
-      setError("Failed to load repositories");
       setRepos([]);
     }
 
-    setLoadingRepos(false);
+    setReposLoading(false);
+    setActiveRepoLoading(false);
   };
 
-  /* ===========================================================
-     IMPORT REPO (SSE handles live progress)
-  =========================================================== */
-  const importRepo = async (repoUrl) => {
+  /* ====================================================
+     SET ACTIVE REPO
+  ==================================================== */
+  const setActiveRepoSafe = (repo) => {
+    localStorage.setItem("activeRepo", repo.id);
+    setActiveRepo(repo);
+  };
+
+  /* ====================================================
+     FILE TREE FETCH
+  ==================================================== */
+  const getFiles = async (repoMongoId) => {
     try {
-      const res = await api.post("/api/repo/import", { repoUrl });
-
-      // Already imported
-      if (res.data.alreadyImported) {
-        return {
-          success: false,
-          alreadyImported: true,
-          repoId: res.data.repoId,
-          message: res.data.message,
-        };
-      }
-
-      // New import triggered
-      return {
-        success: true,
-        repoId: res.data.repoId,
-      };
-
+      const res = await api.get(`/api/tree/${repoMongoId}`);
+      return res.data.tree || [];
     } catch (err) {
-      console.error("Repo import failed:", err);
-      return {
-        success: false,
-        error: err.response?.data?.message || "Import failed",
-      };
+      console.error("❌ Failed to fetch files:", err);
+      return [];
     }
   };
 
-  /* ===========================================================
-     LOAD REPOS AFTER LOGIN
-  =========================================================== */
+  /* Load repos when logged in */
   useEffect(() => {
-    if (!authLoading && user) {
-      fetchRepos();
-    } else if (!user) {
+    if (!authLoading && user) fetchRepos();
+    else if (!user) {
       setRepos([]);
       setActiveRepo(null);
     }
   }, [user, authLoading]);
-
-  /* ===========================================================
-     SET ACTIVE REPO (stores both id + name)
-  =========================================================== */
-  const setActiveRepoSafe = (repo) => {
-    // repo = { id, name }
-    setActiveRepo(repo);
-    localStorage.setItem("activeRepo", repo.id);
-  };
 
   return (
     <RepoContext.Provider
       value={{
         repos,
         activeRepo,
-        loadingRepos,
-        error,
-        fetchRepos,
-        importRepo,
+        reposLoading,
+        activeRepoLoading,
         setActiveRepo: setActiveRepoSafe,
+        getFiles,
       }}
     >
       {children}

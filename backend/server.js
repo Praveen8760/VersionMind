@@ -13,6 +13,9 @@ import authRoutes from "./routes/auth.js";
 import repoRoutes from "./routes/repo.js";
 import chatRoutes from "./routes/chat.js";          // ✅ ADDED
 import sseRoutes from "./routes/sse.js";
+import treeRoute from "./routes/repoTree.js";
+import graphRoutes from "./routes/graph.js";
+
 
 import { isAuthenticated } from "./middleware/auth.js";
 import "./config/passport.js";
@@ -89,6 +92,13 @@ app.use("/api/chat", chatRoutes);    // ✅ FIXED & ADDED
 
 // 🟦 SSE IMPORT STREAM (NO AUTH because EventSource sends cookie later)
 app.use("/sse", sseRoutes);
+
+
+// Need to be tested
+
+app.use("/api/tree",isAuthenticated, treeRoute);
+
+app.use("/api/graph", isAuthenticated, graphRoutes);
 
 /* ============================================================================
    7. HEALTH CHECK
