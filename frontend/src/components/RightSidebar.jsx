@@ -10,11 +10,18 @@ import {
   BarChart2,
   GitBranch,
   StickyNote,
+  Flame as FireIcon,
 } from "lucide-react";
 
 import axios from "axios";
 import { useRepo } from "../context/RepoContext";
 import FunctionGraph from "./FunctionGraph";
+import ProjectSummaryModal from "./models/ProjectSummaryModal";
+import CodeMetricsModal from "./models/CodeMetricsModal";
+import HotspotAnalysisModal from "./models/HotspotAnalysisModal";
+import DependencyInsightsModal from "./models/DependencyInsightsModal";
+
+
 
 const SECTIONS = [
   { id: "explorer", label: "Files", icon: Folder, color: "#3B82F6" },
@@ -30,6 +37,12 @@ export default function RightSidebar() {
   const [fileTree, setFileTree] = useState([]);
   const [expanded, setExpanded] = useState({});
   const [loading, setLoading] = useState(false);
+
+  // model states
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [showMetricsModal, setShowMetricsModal] = useState(false);
+  const [showHotspotsModal, setShowHotspotsModal] = useState(false);  
+  const [showDependencyModal, setShowDependencyModal] = useState(false);
 
   /* ---------------------------------------------------------
      LOAD FILE TREE WHEN:
@@ -142,13 +155,120 @@ export default function RightSidebar() {
 
     if (activeSection === "insights")
       return (
-        <div className="p-2 text-gray-300">
-          <p className="text-lg mb-3 text-purple-400">AI Insights</p>
-          <p className="text-xs text-gray-400">
-            Code complexity, language breakdown, hotspots…
+        <div className="flex flex-col h-full">
+
+          {/* Title */}
+          <p className="text-lg font-semibold mb-4 text-purple-400">
+            AI Insights
           </p>
+
+          {/* Feature Buttons */}
+          <div className="space-y-3 mb-4">
+
+            {/* Summary */}
+            <button
+              className="
+                w-full p-3 rounded-xl text-left
+                bg-[#171b21]/60 border border-[#1f2329]
+                hover:bg-[#1d222a] hover:border-[#2a2e33]
+                transition flex items-center gap-3
+              "
+              onClick={() => setShowSummaryModal(true)}
+            >
+              <BarChart2 size={18} className="text-purple-400" />
+              <span className="text-sm text-gray-200">Project Summary</span>
+            </button>
+
+            {/* Code Metrics */}
+            <button
+              className="
+                w-full p-3 rounded-xl text-left
+                bg-[#171b21]/60 border border-[#1f2329]
+                hover:bg-[#1d222a] hover:border-[#2a2e33]
+                transition flex items-center gap-3
+              "
+              onClick={() => setShowMetricsModal(true)}
+            >
+              <GitBranch size={18} className="text-blue-400" />
+              <span className="text-sm text-gray-200">Code Metrics</span>
+            </button>
+
+            {/* Hotspot Analysis */}
+            <button
+              className="
+                w-full p-3 rounded-xl text-left
+                bg-[#171b21]/60 border border-[#1f2329]
+                hover:bg-[#1d222a] hover:border-[#2a2e33]
+                transition flex items-center gap-3
+              "
+              onClick={() => setShowHotspotsModal(true)}
+            >
+              <FireIcon size={18} className="text-red-400" />
+              <span className="text-sm text-gray-200">Hotspot Analysis</span>
+            </button>
+
+            {/* Dependencies */}
+            <button
+              className="
+                w-full p-3 rounded-xl text-left
+                bg-[#171b21]/60 border border-[#1f2329]
+                hover:bg-[#1d222a] hover:border-[#2a2e33]
+                transition flex items-center gap-3
+              "
+              onClick={() => setShowDependencyModal(true)}
+            >
+              <GitBranch size={18} className="text-cyan-400" />
+              <span className="text-sm text-gray-200">Dependency Insights</span>
+            </button>
+
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-[#1f2329] my-2"></div>
+
+          {/* Export Section */}
+          <p className="text-xs text-gray-500 mb-2">Export</p>
+
+          <div className="space-y-2">
+
+            <button
+              className="
+                w-full p-2 rounded-lg bg-[#13161a]
+                border border-[#23272f] hover:bg-[#1a1e24]
+                text-xs text-gray-300 transition
+              "
+              onClick={() => console.log('Export PDF')}
+            >
+              Export as PDF
+            </button>
+
+            <button
+              className="
+                w-full p-2 rounded-lg bg-[#13161a]
+                border border-[#23272f] hover:bg-[#1a1e24]
+                text-xs text-gray-300 transition
+              "
+              onClick={() => console.log('Export Markdown')}
+            >
+              Export as Markdown
+            </button>
+
+            <button
+              className="
+                w-full p-2 rounded-lg bg-[#13161a]
+                border border-[#23272f] hover:bg-[#1a1e24]
+                text-xs text-gray-300 transition
+              "
+              onClick={() => console.log('Export JSON')}
+            >
+              Export as JSON
+            </button>
+
+          </div>
+
         </div>
       );
+
 
     if (activeSection === "functions")
       return (
@@ -180,7 +300,7 @@ export default function RightSidebar() {
       className="
         w-[300px] min-h-full flex flex-col
         bg-[#0d0f12]/90 border-l border-[#1d2026]
-        p-5 backdrop-blur-xl relative
+        p-5 backdrop-blur-xl relative 
       "
     >
       {/* Glow Divider */}
@@ -229,6 +349,27 @@ export default function RightSidebar() {
       <p className="text-center text-[10px] text-gray-600 mt-4">
         VersionMind • Tools
       </p>
+
+      <ProjectSummaryModal
+        isOpen={showSummaryModal}
+        onClose={() => setShowSummaryModal(false)}
+      />
+
+      <CodeMetricsModal
+        isOpen={showMetricsModal}
+        onClose={() => setShowMetricsModal(false)}
+      />
+
+      <HotspotAnalysisModal
+        isOpen={showHotspotsModal}
+        onClose={() => setShowHotspotsModal(false)}
+      />
+
+      <DependencyInsightsModal
+        isOpen={showDependencyModal}
+        onClose={() => setShowDependencyModal(false)}
+      />  
+
     </motion.div>
   );
 }

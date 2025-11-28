@@ -16,6 +16,7 @@ import sseRoutes from "./routes/sse.js";
 import treeRoute from "./routes/repoTree.js";
 import graphRoutes from "./routes/graph.js";
 
+import aiRoutes from "./routes/ai.js";
 
 import { isAuthenticated } from "./middleware/auth.js";
 import "./config/passport.js";
@@ -99,6 +100,12 @@ app.use("/sse", sseRoutes);
 app.use("/api/tree",isAuthenticated, treeRoute);
 
 app.use("/api/graph", isAuthenticated, graphRoutes);
+
+
+app.use("/api/ai", aiRoutes);
+
+
+
 
 /* ============================================================================
    7. HEALTH CHECK

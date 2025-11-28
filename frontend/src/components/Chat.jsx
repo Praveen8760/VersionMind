@@ -107,7 +107,7 @@ export default function Chat({ activeRepo }) {
      RENDER UI
   --------------------------------------------- */
   return (
-    <div className="relative flex flex-col h-full w-full bg-[#0A0B0D]">
+    <div className="relative flex flex-col h-full w-full bg-transparent">
 
       {/* ===================== CHAT THREAD ===================== */}
       <div
