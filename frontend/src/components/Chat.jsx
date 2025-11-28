@@ -112,7 +112,7 @@ export default function Chat({ activeRepo }) {
       {/* ===================== CHAT THREAD ===================== */}
       <div
         className="
-          flex-1 overflow-y-auto px-6 pt-10 pb-36 space-y-7
+          flex-1 overflow-y-auto px-6 pt-10 pb-36 space-y-7 h-40
           scrollbar-thin scrollbar-thumb-[#1c1e24] scrollbar-track-transparent
         "
       >
@@ -242,9 +242,8 @@ export default function Chat({ activeRepo }) {
       <div
         className="
           sticky bottom-0 w-full px-5 py-6 
-          bg-[#0C0D10]/95 backdrop-blur-2xl 
+          backdrop-blur-2xl 
           border-t border-[#16181d]
-          shadow-[0_-12px_45px_-22px_rgba(0,0,0,0.75)]
         "
       >
         <div className="max-w-3xl mx-auto flex flex-col gap-4">
