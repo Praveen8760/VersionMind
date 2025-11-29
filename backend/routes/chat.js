@@ -1,14 +1,17 @@
 
 // backend/routes/chat.js
+
 import express from "express";
 import Repo from "../models/Repo.js";
+import ChatMessage from "../models/ChatMessage.js";
 import { runRAG } from "../services/rag.js";
 
 const router = express.Router();
 
-/* ============================================================================
-   LOGGING (Colored Console Output)
-============================================================================= */
+/* ========================================================================== */
+/* LOGGING                                                                   */
+/* ========================================================================== */
+
 const LOG = {
   info: (m) => console.log(`\x1b[36m[INFO] ${m}\x1b[0m`),
   success: (m) => console.log(`\x1b[32m[SUCCESS] ${m}\x1b[0m`),
@@ -18,9 +21,10 @@ const LOG = {
   debug: (m) => console.log(`\x1b[90m[DEBUG] ${m}\x1b[0m`)
 };
 
-/* ============================================================================
-   Initialize SSE channel
-============================================================================= */
+/* ========================================================================== */
+/* SSE INIT                                                                   */
+/* ========================================================================== */
+
 function initSSE(res) {
   LOG.event("🔵 SSE Connection OPEN");
 
@@ -30,10 +34,9 @@ function initSSE(res) {
 
   res.flushHeaders?.();
 
-  // Keep-alive heartbeat (prevents disconnections)
-  const ping = setInterval(() => {
-    res.write(`event: ping\ndata: "alive"\n\n`);
-  }, 15000);
+  const ping = setInterval(() =>
+    res.write(`event: ping\ndata: "alive"\n\n`)
+  , 15000);
 
   res.on("close", () => {
     clearInterval(ping);
@@ -41,36 +44,57 @@ function initSSE(res) {
   });
 }
 
-/* ============================================================================
-   Safe SSE write (avoids crashes if client disconnects)
-============================================================================= */
 function safeWrite(res, data) {
   try {
     res.write(data);
   } catch (err) {
-    LOG.error("❌ SSE write failed, client disconnected");
+    LOG.error("❌ SSE write failed — client disconnected");
   }
 }
 
-/* ============================================================================
-   MAIN SSE ROUTE: GET /chat/ask/stream
-   (works with EventSource)
-============================================================================= */
+/* ========================================================================== */
+/*  LOAD CHAT HISTORY (new event for UI)                                      */
+/* ========================================================================== */
+
+router.get("/history/:repoId", async (req, res) => {
+  try {
+    const { repoId } = req.params;
+    const userId = req.user._id;
+
+    const messages = await ChatMessage.find({ repo: repoId, user: userId })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    return res.json({ messages });
+  } catch (err) {
+    console.error("❌ Chat history fetch error:", err);
+    return res.status(500).json({ error: "Failed to load chat history" });
+  }
+});
+
+/* ========================================================================== */
+/* MAIN SSE ROUTE                                                             */
+/* ========================================================================== */
+
 router.get("/ask/stream", async (req, res) => {
   const t0 = Date.now();
   LOG.info("📩 Incoming GET /chat/ask/stream");
 
   try {
     const { repoId, query } = req.query;
+    const userId = req.user?._id;
 
-    LOG.debug("Query Params: " + JSON.stringify(req.query));
     LOG.info(`➡ Repo: ${repoId}`);
     LOG.info(`➡ Query: "${query}"`);
 
-    // --------------------- VALIDATION ---------------------
     if (!repoId || !query) {
       LOG.warn("⚠ Missing repoId or query");
       return safeWrite(res, `event: error\ndata: "Missing repoId/query"\n\n`);
+    }
+
+    if (!userId) {
+      LOG.warn("⚠ User not logged in");
+      return safeWrite(res, `event: error\ndata: "User not authenticated"\n\n`);
     }
 
     const repo = await Repo.findById(repoId);
@@ -81,45 +105,74 @@ router.get("/ask/stream", async (req, res) => {
 
     if (repo.status !== "ready") {
       LOG.warn(`⚠ Repo not ready: ${repo.status}`);
-      return safeWrite(
-        res,
-        `event: error\ndata: "Repo not ready: ${repo.status}"\n\n`
-      );
+      return safeWrite(res, `event: error\ndata: "Repo not ready"\n\n`);
     }
 
     LOG.success(`📁 Repo Loaded: ${repo.repoName}`);
 
-    // --------------------- OPEN SSE ---------------------
+    /* ====================================================================== */
+    /*  SAVE USER MESSAGE                                                     */
+    /* ====================================================================== */
+
+    await ChatMessage.create({
+      user: userId,
+      repo: repoId,
+      sender: "user",
+      message: query
+    });
+
+    /* ====================================================================== */
+    /*  SSE OPEN                                                              */
+    /* ====================================================================== */
+
     initSSE(res);
 
+    // tell UI that streaming begins
     safeWrite(res, `event: start\ndata: "Streaming started"\n\n`);
 
-    const sendToken = (token) => {
+    let aiFullResponse = "";
+    let contextUsed = [];
+
+    const sendToken = (token) =>
+    {
       if (!token) return;
-      LOG.event("⬆ TOKEN: " + token.replace(/\n/g, "\\n"));
+      aiFullResponse += token;
       safeWrite(res, `event: token\ndata: ${JSON.stringify({ token })}\n\n`);
     };
 
     LOG.info("🚀 Running RAG pipeline...");
 
-    // --------------------- RUN RAG ---------------------
-    await runRAG({
+    const ragResult = await runRAG({
       repoId,
       query,
       sendToken
     });
+
+    contextUsed = ragResult?.contextUsed || [];
 
     LOG.success("🏁 RAG Completed");
 
     safeWrite(res, `event: done\ndata: "completed"\n\n`);
     LOG.info(`⏳ Time: ${Date.now() - t0}ms`);
 
-    return res.end();
-  } catch (err) {
-    LOG.error("❌ Stream Route Error: " + err.message);
+    /* ====================================================================== */
+    /*  SAVE AI RESPONSE                                                      */
+    /* ====================================================================== */
 
-    safeWrite(
-      res,
+    await ChatMessage.create({
+      user: userId,
+      repo: repoId,
+      sender: "ai",
+      message: aiFullResponse,
+      tokens: aiFullResponse.length,
+      contextUsed
+    });
+
+    return res.end();
+  }
+  catch (err) {
+    LOG.error("❌ Stream Error: " + err.message);
+    safeWrite(res,
       `event: error\ndata: ${JSON.stringify({ error: err.message })}\n\n`
     );
 
@@ -127,14 +180,14 @@ router.get("/ask/stream", async (req, res) => {
   }
 });
 
-/* ============================================================================
-   Legacy POST /ask route (optional — kept for compatibility)
-============================================================================= */
-router.post("/ask", (req, res) => {
+/* ========================================================================== */
+/* LEGACY ROUTE (unchanged)                                                   */
+/* ========================================================================== */
+
+router.post("/ask", (req, res) =>
   res.json({
-    error:
-      "❌ Use GET /api/chat/ask/stream instead. The POST route is deprecated."
-  });
-});
+    error: "❌ Use GET /api/chat/ask/stream instead. POST is deprecated."
+  })
+);
 
 export default router;

@@ -36,7 +36,8 @@ export default function Chat({ activeRepo }) {
 
   /* Reset chat on repo switch */
   useEffect(() => {
-    resetChat();
+    const repoId = activeRepo?.id || activeRepo?._id;
+    resetChat(repoId);
   }, [activeRepo]);
 
   /* Auto scroll */
