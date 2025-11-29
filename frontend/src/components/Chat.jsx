@@ -15,14 +15,42 @@ import RepoImportProgress from "./RepoImportProgress";
 function renderMessage(text) {
   if (!text) return "";
 
-  text = text.replace(/`([^`]+)`/g, "<code class='inline-code'>$1</code>");
+  let clean = text.trim();
 
-  text = text.replace(/```([\s\S]*?)```/g, (m, code) => {
-    return `<pre class="code-block"><code>${code}</code></pre>`;
-  });
+  // Remove markdown bold (**text**)
+  clean = clean.replace(/\*\*(.*?)\*\*/g, "$1");
 
-  return text;
+  // Convert markdown "Title:" into a nice card header
+  clean = clean.replace(
+    /^([\w\s]+):/gm,
+    `<div class="ai-card"><div class="ai-title">$1</div>`
+  );
+
+  // Convert list items "- something"
+  clean = clean.replace(
+    /^\s*-\s+(.*)$/gm,
+    `<div class="ai-list-item">• $1</div>`
+  );
+
+  // Code blocks
+  clean = clean.replace(
+    /```([\s\S]*?)```/g,
+    (_, code) => `
+      <div class="ai-code-card">
+        <pre>${code.trim()}</pre>
+      </div>
+    `
+  );
+
+  // Inline code
+  clean = clean.replace(/`([^`]+)`/g, `<span class="ai-inline-code">$1</span>`);
+
+  // Close card blocks automatically
+  clean = clean.replace(/\n{2,}/g, `</div><div class="ai-card">`);
+
+  return `<div class="ai-block">${clean}</div>`;
 }
+
 
 export default function Chat({ activeRepo }) {
   const [input, setInput] = useState("");
