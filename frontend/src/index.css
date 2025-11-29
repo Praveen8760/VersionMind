@@ -10,10 +10,11 @@
   --foreground: hsl(222.2 47.4% 11.2%);
 }
 
-html, body {
+html, body,#root{
   height: 100%;
   margin: 0;
   padding: 0;
+  overflow: hidden;
 }
 
 body {

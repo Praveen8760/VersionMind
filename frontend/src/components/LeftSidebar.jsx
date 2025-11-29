@@ -15,18 +15,18 @@ import { useRepo } from "../context/RepoContext";
 export default function LeftSidebar() {
   const { user, logout } = useAuth();
   const { repos, activeRepo, setActiveRepo, loadingRepos } = useRepo();
-
   const [openProfile, setOpenProfile] = useState(false);
 
   return (
-    <div className="
-      min-h-full w-[270px]
-      bg-[#0C0D10]/90 backdrop-blur-2xl
-      border-r border-[#1a1d22]
-      flex flex-col relative
-      shadow-[4px_0_20px_-10px_rgba(0,0,0,0.4)]
-    ">
-
+    <div
+      className="
+        h-full w-[270px]
+        bg-[#0C0D10]/90 backdrop-blur-2xl
+        border-r border-[#1a1d22]
+        flex flex-col relative
+        shadow-[4px_0_20px_-10px_rgba(0,0,0,0.4)]
+      "
+    >
       {/* Divider Glow */}
       <div className="absolute right-0 top-0 h-full w-[1px] bg-gradient-to-b from-transparent via-[#3B82F6]/40 to-transparent" />
 
@@ -37,9 +37,16 @@ export default function LeftSidebar() {
         </h2>
       </div>
 
-      {/* Repo List */}
-      <div className="mt-4 px-4 overflow-y-auto flex-1 space-y-3">
-
+      {/* ============================================
+          Scrollable Repo List (fixed-height sidebar)
+         ============================================ */}
+      <div
+        className="
+          flex-1 mt-4 px-4 overflow-y-auto 
+          space-y-3
+          scrollbar-thin scrollbar-thumb-[#25282e] scrollbar-track-transparent
+        "
+      >
         {/* Loading */}
         {loadingRepos && (
           <div className="flex flex-col items-center mt-10 gap-2 text-gray-500">
@@ -72,14 +79,11 @@ export default function LeftSidebar() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() =>
-                  setActiveRepo({
-                    id: repo._id,
-                    name: repo.repoName,
-                  })
+                  setActiveRepo({ id: repo._id, name: repo.repoName })
                 }
                 className={`
                   p-4 rounded-xl cursor-pointer border
-                  bg-[#13161A]/50 hover:bg-[#15191f] mt-3
+                  bg-[#13161A]/50 hover:bg-[#15191f]
                   transition-all duration-200 flex flex-col gap-2
 
                   ${
@@ -89,7 +93,7 @@ export default function LeftSidebar() {
                   }
                 `}
               >
-                {/* Top: Name */}
+                {/* Repo name */}
                 <div className="flex items-center gap-2">
                   <FolderGit2 size={18} className="text-[#3B82F6]" />
                   <p className="text-[15px] font-medium truncate">
@@ -97,19 +101,17 @@ export default function LeftSidebar() {
                   </p>
                 </div>
 
-                {/* Middle: Branch + Status */}
+                {/* Branch + Status */}
                 <div className="flex items-center justify-between">
-                  {/* Branch */}
                   <div className="flex items-center gap-1.5 text-gray-400 text-xs">
                     <GitBranch size={13} />
                     {repo.branch || "main"}
                   </div>
 
-                  {/* Status badge */}
                   <span
                     className={`
-                      text-[10px] px-2 py-0.5
-                      rounded-full font-semibold tracking-wide
+                      text-[10px] px-2 py-0.5 rounded-full
+                      font-semibold tracking-wide
                       ${statusColor}
                     `}
                   >
@@ -117,7 +119,7 @@ export default function LeftSidebar() {
                   </span>
                 </div>
 
-                {/* Bottom: File count */}
+                {/* File count */}
                 {repo.fileCount !== undefined && (
                   <div className="flex items-center gap-1.5 text-gray-500 text-[11px]">
                     <FileCode size={12} />
@@ -129,8 +131,16 @@ export default function LeftSidebar() {
           })}
       </div>
 
-      {/* Profile Section */}
-      <div className="px-4 pb-6">
+      {/* ============================================
+          FIXED Bottom Profile Section (like ChatGPT)
+         ============================================ */}
+      <div
+        className="
+          p-4 pb-6
+          border-t border-[#1a1d22]/70
+          bg-[#0C0D10]/80 backdrop-blur-xl
+        "
+      >
         <motion.div
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
@@ -143,14 +153,11 @@ export default function LeftSidebar() {
             shadow-sm
           "
         >
-          {/* Left: Avatar + name */}
+          {/* Avatar + name */}
           <div className="flex items-center gap-3">
             <img
               src={user?.avatar}
-              className="
-                w-10 h-10 rounded-xl object-cover
-                border border-[#22262c] shadow-sm
-              "
+              className="w-10 h-10 rounded-xl object-cover border border-[#22262c] shadow-sm"
             />
             <div className="leading-tight">
               <p className="text-sm font-medium">{user?.name}</p>
@@ -158,7 +165,6 @@ export default function LeftSidebar() {
             </div>
           </div>
 
-          {/* Right arrow */}
           <svg
             width="16"
             height="16"

@@ -1,49 +1,57 @@
 
-
 import { motion } from "framer-motion";
 import { Zap } from "lucide-react";
 
 export default function AppHeader() {
   return (
     <motion.header
-      initial={{ opacity: 0, y: -14 }}
+      initial={{ opacity: 0, y: -12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
       className="
-        sticky top-0 z-20
-        h-[66px]
-        bg-[#0E1013]/80 backdrop-blur-xl
-        border-b border-[#1a1d22]
+        sticky top-0 z-30
+        h-[68px]
+        bg-[#0C0E11]/70
+        backdrop-blur-2xl
+        border-b border-[#1a1d22]/70
+        shadow-[0_4px_24px_-4px_rgba(0,0,0,0.55)]
         flex items-center justify-center
-        shadow-[0_4px_20px_-8px_rgba(0,0,0,0.45)]
         relative
       "
     >
-      {/* Subtle glow behind brand */}
-      <div className="
-        absolute inset-0 
-        bg-gradient-to-b from-[#3B82F6]/5 to-transparent 
-        pointer-events-none
-      " />
 
-      {/* Brand Container */}
-      <div className="flex items-center gap-3 select-none relative">
+      {/* Soft ambient glow */}
+      <div
+        className="
+          absolute inset-0
+          bg-gradient-to-b from-[#3B82F6]/10 via-transparent to-transparent
+          pointer-events-none
+        "
+      />
 
-        {/* Icon */}
-        <div
+      {/* Header Content */}
+      <div className="flex items-center gap-3 relative select-none">
+
+        {/* Brand Icon Box */}
+        <motion.div
+          whileHover={{ scale: 1.06 }}
+          transition={{ type: "spring", stiffness: 210, damping: 14 }}
           className="
-            w-[38px] h-[38px] flex items-center justify-center
-            bg-[#111318] border border-[#21252c]
+            w-[42px] h-[42px]
+            flex items-center justify-center
             rounded-xl
-            shadow-[0_0_14px_rgba(59,130,246,0.18)]
+            bg-[#121418]
+            border border-[#242830]
+            shadow-[0_0_18px_rgba(59,130,246,0.20)]
           "
         >
-          <Zap size={18} className="text-[#3B82F6]" />
-        </div>
+          <Zap size={20} className="text-[#3B82F6]" />
+        </motion.div>
 
-        {/* Text */}
-        <h1 className="text-[22px] font-semibold tracking-tight">
-          Version<span className="text-[#3B82F6]">Mind</span>
+        {/* Branding Text */}
+        <h1 className="text-[23px] font-semibold tracking-tight flex items-center gap-1">
+          Version
+          <span className="text-[#3B82F6] font-bold">Mind</span>
         </h1>
       </div>
     </motion.header>

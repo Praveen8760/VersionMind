@@ -1,84 +1,76 @@
 
-
-import { motion } from "framer-motion";
+ import { motion } from "framer-motion";
 import { Github, Zap } from "lucide-react";
 
 export default function Login() {
   return (
-    <div className="relative min-h-screen w-full bg-[#0B0D10] flex items-center justify-center overflow-hidden">
+    <div className="relative min-h-screen w-full bg-[#0B0D10] flex items-center justify-center overflow-hidden text-white">
 
-      {/* --- GRID BACKGROUND --- */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#15181d_1px,transparent_1px),linear-gradient(to_bottom,#15181d_1px,transparent_1px)] bg-[size:38px_38px] opacity-[0.12]" />
+      {/* Subtle gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#0E1117] to-[#0B0D10] opacity-95" />
 
-      {/* --- NOISE TEXTURE --- */}
-      <div className="absolute inset-0 opacity-[0.05] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+      {/* Very soft grid */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:42px_42px]" />
 
-      {/* --- BLUE SIGNATURE GLOW --- */}
+      {/* Noise layer */}
+      <div className="absolute inset-0 opacity-[0.04] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+
+      {/* Soft radial highlight */}
+      <div className="absolute w-[600px] h-[600px] bg-[#3B82F6]/20 blur-[160px] rounded-full -top-40 -right-32" />
+
+      {/* LOGIN CARD */}
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 0.45 }}
-        transition={{ duration: 1.2 }}
-        className="absolute w-[700px] h-[700px] bg-[#3B82F6] blur-[220px] rounded-full -top-40 -right-32 opacity-30"
-      />
-
-      {/* --- LOGIN CARD --- */}
-      <motion.div
-        initial={{ opacity: 0, y: 45 }}
+        initial={{ opacity: 0, y: 35 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.55, ease: "easeOut" }}
-        className="relative z-10 w-[430px] px-10 py-12 rounded-3xl 
-                   bg-[#0F1115]/80 backdrop-blur-[20px] 
-                   border border-[#1a1d21] shadow-[0_8px_40px_-10px_rgba(0,0,0,0.7)]"
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="
+          relative z-10 w-[420px] max-w-[90%] px-10 py-12
+          rounded-2xl bg-[#0F1115]/40 backdrop-blur-xl
+          border border-[#1a1d21]
+          shadow-[0_20px_40px_-20px_rgba(0,0,0,0.55)]
+        "
       >
-
-        {/* --- LOGO (THUNDER) --- */}
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.45 }}
-          className="flex justify-center mb-6"
-        >
-          <div className="w-16 h-16 rounded-2xl bg-[#111318] border border-[#22262c] flex items-center justify-center shadow-[0px_0px_18px_rgba(59,130,246,0.25)]">
-            <Zap size={34} className="text-[#3B82F6]" />
+        {/* Icon */}
+        <div className="flex justify-center mb-6">
+          <div className="
+            w-14 h-14 rounded-xl bg-[#101317] border border-[#1f2126]
+            flex items-center justify-center
+            shadow-[0_0_12px_rgba(255,255,255,0.05)]
+          ">
+            <Zap size={26} className="text-[#3B82F6]" />
           </div>
-        </motion.div>
+        </div>
 
-        {/* --- BRAND NAME --- */}
-        <motion.h1
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.45 }}
-          className="text-4xl font-semibold tracking-tight text-center text-white"
-        >
+        {/* Title */}
+        <h1 className="text-3xl font-semibold text-center tracking-tight">
           Version<span className="text-[#3B82F6]">Mind</span>
-        </motion.h1>
+        </h1>
 
-        {/* --- SUBTITLE --- */}
-        <p className="text-gray-400 text-center mt-3 mb-10">
-          Lightning-fast AI for your codebase.
+        <p className="text-gray-400 text-center mt-3 mb-10 text-sm">
+          Sign in to continue to your workspace.
         </p>
 
-        {/* --- LOGIN BUTTON --- */}
+        {/* GitHub Login */}
         <motion.a
           href="http://localhost:3000/auth/github"
-          whileHover={{ scale: 1.04 }}
+          whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
           className="
-            w-full flex items-center justify-center gap-3 
-            py-3.5 rounded-xl 
-            bg-[#14171c] text-white text-lg font-medium 
-            border border-[#262a30]
-            hover:border-[#3B82F6] hover:bg-[#1b1f25]
-            transition-all duration-200 shadow-[0_0_20px_rgba(0,0,0,0.4)]
+            w-full flex items-center justify-center gap-3
+            py-3.5 rounded-xl
+            bg-[#111417] border border-[#1f2328]
+            hover:bg-[#15181d]
+            transition-all duration-200
+            text-white text-sm font-medium
           "
         >
-          <Github size={22} />
-          Sign in with GitHub
+          <Github size={20} />
+          Continue with GitHub
         </motion.a>
 
-        {/* FOOTNOTE */}
-        <p className="text-center text-sm text-gray-500 mt-8">
-          Secure OAuth • Zero passwords stored
+        {/* Footer */}
+        <p className="text-center text-xs text-gray-500 mt-8">
+          Secure OAuth • No password stored
         </p>
       </motion.div>
     </div>

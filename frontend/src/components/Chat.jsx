@@ -1,5 +1,4 @@
 
-
 // src/components/Chat.jsx
 
 import { useEffect, useState, useRef } from "react";
@@ -11,15 +10,13 @@ import { useRepoImport } from "../context/RepoImportContext";
 import RepoImportProgress from "./RepoImportProgress";
 
 /* ------------------------------------------------------
-   🔵 Markdown / Code formatter
+   Markdown / Code formatter (logic untouched)
 ------------------------------------------------------ */
 function renderMessage(text) {
   if (!text) return "";
 
-  // Wrap inline code
   text = text.replace(/`([^`]+)`/g, "<code class='inline-code'>$1</code>");
 
-  // Wrap code blocks
   text = text.replace(/```([\s\S]*?)```/g, (m, code) => {
     return `<pre class="code-block"><code>${code}</code></pre>`;
   });
@@ -30,99 +27,72 @@ function renderMessage(text) {
 export default function Chat({ activeRepo }) {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState("chat");
+
   const scrollRef = useRef(null);
+  const containerRef = useRef(null);
 
   const { messages, loading: aiLoading, sendQuery, resetChat } = useChat();
   const { isImporting, progress, startImport } = useRepoImport();
 
-  /* --------------------------------------------
-     RESET CHAT WHEN SWITCHING REPO
-  --------------------------------------------- */
+  /* Reset chat on repo switch */
   useEffect(() => {
     resetChat();
   }, [activeRepo]);
 
-  /* --------------------------------------------
-     AUTOSCROLL TO LAST MESSAGE
-  --------------------------------------------- */
+  /* Auto scroll */
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "end",
-      });
+      scrollRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
     }
   }, [messages]);
 
-  /* --------------------------------------------
-     SEND ACTION
-  --------------------------------------------- */
+  /* Send Message */
   const handleSend = () => {
     if (!input.trim()) return;
 
     if (mode === "chat") {
       if (!activeRepo) return;
       sendQuery({ repoId: activeRepo.id, query: input.trim() });
-      setInput("");
     } else {
       startImport(input.trim());
-      setInput("");
     }
+
+    setInput("");
   };
 
-  /* ----------------------------------------------------------
-      CLICKABLE UI HELPERS (Open File + Jump to Function)
-  ----------------------------------------------------------- */
-  const handleOpenFile = (filePath) => {
-    alert(`TODO: Open file viewer for: ${filePath}`);
-  };
-
-  const handleJumpToFunction = (fn) => {
-    alert(`TODO: Scroll to function definition: ${fn}`);
-  };
-
-  /* ----------------------------------------------------------
-      PARSE LINKED FILE/FUNCTION TAGS FROM BACKEND
-      backend will send:
-      { file:"src/app.js", fn:"add", text:"..." }
-  ----------------------------------------------------------- */
+  /* Extract metadata tags */
   const extractLinkedMeta = (msg) => {
     const meta = {};
-
     if (msg.text.includes("FILE: ")) {
       const match = msg.text.match(/FILE:\s*(.+)/);
       if (match) meta.file = match[1].trim();
     }
-
     if (msg.text.includes("function ")) {
-      // naive match - backend already grouped functions
       const fn = msg.text.match(/function\s+(\w+)/);
       if (fn) meta.fn = fn[1];
     }
-
     return meta;
   };
 
-  /* --------------------------------------------
-     RENDER UI
-  --------------------------------------------- */
   return (
-    <div className="relative flex flex-col h-full w-full bg-transparent">
+    <div className="relative flex flex-col h-full w-full bg-transparent overflow-hidden">
 
-      {/* ===================== CHAT THREAD ===================== */}
+      {/* ================= CHAT MESSAGES (Scroll Area) ================= */}
       <div
+        ref={containerRef}
         className="
-          flex-1 overflow-y-auto px-6 pt-10 pb-36 space-y-7 h-40
+          flex-1 overflow-y-auto px-6 pb-40 pt-12
           scrollbar-thin scrollbar-thumb-[#1c1e24] scrollbar-track-transparent
         "
       >
-        {/* ---------- EMPTY STATE ---------- */}
+        {/* -------- Empty state when no repo ---------- */}
         {!activeRepo && mode === "chat" && (
           <motion.div
             initial={{ opacity: 0, y: 25 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center mt-32 text-center"
+            className="flex flex-col items-center justify-center mt-28 text-center"
           >
+            {/* Bot icon */}
             <motion.div
               initial={{ scale: 0.6 }}
               animate={{ scale: 1 }}
@@ -141,13 +111,13 @@ export default function Chat({ activeRepo }) {
               Select a repository to start
             </h2>
             <p className="text-sm text-gray-500 max-w-xs mt-2 leading-relaxed">
-              Import a GitHub repository or choose one from the left sidebar to begin chatting.
+              Import a GitHub repository or pick one from the left sidebar.
             </p>
           </motion.div>
         )}
 
-        {/* ---------- MESSAGE THREAD ---------- */}
-        <AnimatePresence mode="popLayout">
+        {/* -------- MESSAGE LIST ---------- */}
+        <AnimatePresence>
           {messages.map((msg, index) => {
             const isUser = msg.sender === "user";
             const meta = extractLinkedMeta(msg);
@@ -155,49 +125,50 @@ export default function Chat({ activeRepo }) {
             return (
               <motion.div
                 key={index}
-                initial={{ opacity: 0, y: 14, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className={`flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}
+                transition={{ duration: 0.18 }}
+                className={`flex items-start gap-3 mb-6 ${
+                  isUser ? "justify-end" : "justify-start"
+                }`}
               >
-                {/* AI Avatar */}
+                {/* --- Bot Avatar --- */}
                 {!isUser && (
                   <div
                     className="
-                      w-10 h-10 flex items-center justify-center rounded-xl
-                      bg-[#101216] border border-[#202328] shadow-md
+                      w-9 h-9 flex items-center justify-center rounded-xl
+                      bg-[#101216] border border-[#202328]
                     "
                   >
-                    <Bot size={20} className="text-[#3B82F6]" />
+                    <Bot size={18} className="text-[#3B82F6]" />
                   </div>
                 )}
 
-                {/* MESSAGE BUBBLE */}
+                {/* --- Message Bubble --- */}
                 <div
                   className={`
-                    max-w-[75%] px-5 py-3.5 rounded-2xl text-[0.95rem]
-                    whitespace-pre-wrap break-words leading-relaxed tracking-wide
-                    shadow-[0_8px_25px_-8px_rgba(0,0,0,0.55)] backdrop-blur-lg
+                    max-w-[75%] px-5 py-3.5 rounded-2xl text-[0.94rem]
+                    shadow-[0_8px_20px_-6px_rgba(0,0,0,0.55)] backdrop-blur-lg
+                    whitespace-pre-wrap leading-relaxed tracking-wide break-words
                     ${
                       isUser
-                        ? "bg-gradient-to-br from-[#3B82F6] to-[#2563EB] text-white border border-blue-500/10 rounded-br-none"
+                        ? "bg-[#3B82F6] text-white rounded-br-none"
                         : "bg-[#16191F]/70 text-gray-200 border border-[#202428] rounded-bl-none"
                     }
                   `}
                 >
-                  {/* Render formatted HTML */}
                   <div
                     className="prose prose-invert text-gray-200"
                     dangerouslySetInnerHTML={{ __html: renderMessage(msg.text) }}
                   />
 
-                  {/* --------- Metadata Buttons (file / functions) ---------- */}
+                  {/* ----- Metadata buttons ----- */}
                   {!isUser && (
                     <div className="flex gap-4 mt-3 text-xs">
                       {meta.file && (
                         <button
-                          onClick={() => handleOpenFile(meta.file)}
+                          onClick={() => alert(meta.file)}
                           className="flex items-center gap-1 text-blue-400 hover:underline"
                         >
                           <FileCode2 size={14} /> {meta.file}
@@ -206,7 +177,7 @@ export default function Chat({ activeRepo }) {
 
                       {meta.fn && (
                         <button
-                          onClick={() => handleJumpToFunction(meta.fn)}
+                          onClick={() => alert(meta.fn)}
                           className="flex items-center gap-1 text-emerald-400 hover:underline"
                         >
                           <Brackets size={14} /> {meta.fn}()
@@ -216,15 +187,15 @@ export default function Chat({ activeRepo }) {
                   )}
                 </div>
 
-                {/* USER AVATAR */}
+                {/* --- User Avatar --- */}
                 {isUser && (
                   <div
                     className="
-                      w-10 h-10 flex items-center justify-center rounded-xl
-                      bg-[#16181d] border border-[#2c2f35] shadow-sm
+                      w-9 h-9 flex items-center justify-center rounded-xl
+                      bg-[#16181d] border border-[#2c2f35]
                     "
                   >
-                    <User size={20} className="text-white/80" />
+                    <User size={18} className="text-white/80" />
                   </div>
                 )}
               </motion.div>
@@ -235,32 +206,28 @@ export default function Chat({ activeRepo }) {
         <div ref={scrollRef} />
       </div>
 
-      {/* ============ IMPORT PROGRESS ============ */}
+      {/* Repo Import Progress */}
       {isImporting && <RepoImportProgress progress={progress} />}
 
-      {/* ===================== INPUT BAR ===================== */}
+      {/* ================= FIXED INPUT BAR (ChatGPT style) ================= */}
       <div
         className="
-          sticky bottom-0 w-full px-5 py-6 
-          backdrop-blur-2xl 
-          border-t border-[#16181d]
+          absolute bottom-0 left-0 w-full
+          px-6 py-6
+          backdrop-blur-2xl border-t border-[#16181d]
         "
       >
         <div className="max-w-3xl mx-auto flex flex-col gap-4">
 
-          {/* ---------- MODE SWITCH ---------- */}
+          {/* --- Mode Switch --- */}
           <div
             className="
               relative bg-[#14171C]/70 border border-[#22252b]
-              rounded-2xl p-1 flex shadow-lg backdrop-blur-xl
-            "
+              rounded-2xl p-1 flex shadow-lg"
           >
             <motion.div
-              layoutId="mode-switch"
-              className="
-                absolute top-1 bottom-1 bg-[#3B82F6]/25 
-                rounded-xl shadow-inner
-              "
+              layoutId="switch-ui"
+              className="absolute top-1 bottom-1 bg-[#3B82F6]/25 rounded-xl shadow-inner"
               animate={{
                 left: mode === "chat" ? "4px" : "calc(50% + 4px)",
                 width: "calc(50% - 8px)",
@@ -270,7 +237,7 @@ export default function Chat({ activeRepo }) {
 
             <button
               onClick={() => setMode("chat")}
-              className={`relative z-10 w-1/2 py-2 text-sm font-medium transition-all ${
+              className={`relative z-10 w-1/2 py-2 text-sm font-medium ${
                 mode === "chat" ? "text-[#3B82F6]" : "text-gray-500"
               }`}
             >
@@ -279,22 +246,21 @@ export default function Chat({ activeRepo }) {
 
             <button
               onClick={() => setMode("import")}
-              className={`relative z-10 w-1/2 py-2 text-sm font-medium flex items-center justify-center gap-1 transition-all ${
+              className={`relative z-10 w-1/2 py-2 text-sm font-medium flex items-center justify-center gap-1 ${
                 mode === "import" ? "text-[#3B82F6]" : "text-gray-500"
               }`}
             >
-              <UploadCloud size={14} />
-              Import
+              <UploadCloud size={14} /> Import
             </button>
           </div>
 
-          {/* ---------- INPUT FIELD ---------- */}
+          {/* --- Input Field --- */}
           <motion.div
             whileHover={{ scale: 1.01 }}
             className="
               flex items-center gap-3 h-[58px] px-5
               bg-[#0F1115]/95 border border-[#22252b]
-              rounded-2xl backdrop-blur-xl shadow-lg
+              rounded-2xl shadow-lg backdrop-blur-xl
             "
           >
             <input
@@ -309,30 +275,22 @@ export default function Chat({ activeRepo }) {
                     : "Select a repository…"
                   : "Enter GitHub repository URL"
               }
-              className="
-                flex-1 bg-transparent outline-none text-gray-200 text-sm
-                placeholder-gray-500
-              "
+              className="flex-1 bg-transparent outline-none text-gray-200 placeholder-gray-500 text-sm"
             />
 
             <button
               onClick={handleSend}
-              disabled={
-                aiLoading ||
-                (mode === "chat" && !activeRepo) ||
-                !input.trim()
-              }
+              disabled={aiLoading || !input.trim()}
               className="
                 w-12 h-12 flex items-center justify-center rounded-xl
                 bg-[#3B82F6] hover:bg-[#2563eb]
-                disabled:bg-[#3B82F6]/30 disabled:cursor-not-allowed
-                transition-all shadow-md
+                disabled:bg-[#3B82F6]/30
+                transition shadow-md
               "
             >
               <Send size={18} className="text-white" />
             </button>
           </motion.div>
-
         </div>
       </div>
     </div>

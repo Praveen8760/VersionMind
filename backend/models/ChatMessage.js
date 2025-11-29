@@ -1,31 +1,54 @@
 
-
-
 // backend/models/ChatMessage.js
+
 import mongoose from "mongoose";
 
-const chatMessageSchema = new mongoose.Schema(
+const ChatMessageSchema = new mongoose.Schema(
   {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    repo: { type: mongoose.Schema.Types.ObjectId, ref: "Repo", required: true },
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,           // Fast user-based searching
+    },
+
+    repo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Repo",
+      required: true,
+      index: true,           // Fast repo-based searching
+    },
 
     sender: {
       type: String,
       enum: ["user", "ai"],
-      required: true
+      required: true,
     },
 
     message: {
       type: String,
       required: true,
-      default: ""
+      trim: true,
     },
 
-    // optional: store metadata for future improvements
-    tokens: Number,
-    contextUsed: Array,  // chunk IDs used
+    
+    tokens: {
+      type: Number,
+      default: null,
+    },
+
+    contextUsed: {
+      type: [String],
+      default: [],
+    },
   },
-  { timestamps: true }
+
+  {
+    timestamps: true,          
+  }
 );
 
-export default mongoose.model("ChatMessage", chatMessageSchema);
+// Compound index for rapid history lookup
+ChatMessageSchema.index({ user: 1, repo: 1, createdAt: 1 });
+
+export default mongoose.model("ChatMessage", ChatMessageSchema);
