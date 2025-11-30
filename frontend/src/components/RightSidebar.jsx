@@ -8,6 +8,7 @@ import {
   GitBranch,
   StickyNote,
   Flame as FireIcon,
+  History,
 } from "lucide-react";
 
 import axios from "axios";
@@ -20,6 +21,7 @@ import HotspotAnalysisModal from "./models/HotspotAnalysisModal";
 import DependencyInsightsModal from "./models/DependencyInsightsModal";
 import NotesPanel from "./NotesPanel"
 import ReadmeGeneratorPanel from "./ReadmeGeneratorPanel";
+import ChangelogPanel from "./ChangelogPanel";
 
 /* Sidebar Sections */
 const SECTIONS = [
@@ -27,7 +29,8 @@ const SECTIONS = [
   { id: "insights", label: "Insights", icon: BarChart2, color: "#A855F7" },
   { id: "functions", label: "Functions", icon: GitBranch, color: "#22D3EE" },
   { id: "notes", label: "Notes", icon: StickyNote, color: "#FACC15" },
-  {id : "readme", label : "Readme", icon : FileCode, color : "#10B981"}
+  {id : "readme", label : "Readme", icon : FileCode, color : "#10B981"},
+  { id: "changelog", label: "Changelog", icon: History, color: "#fb923c" },
 ];
 
 export default function RightSidebar() {
@@ -133,6 +136,7 @@ export default function RightSidebar() {
 
       return (
         <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#23272f]">
+          <p className="text-xl font-semibold text-blue-400 mb-3">Files</p>
           {fileTree.map((node) => renderNode(node))}
         </div>
       );
@@ -202,6 +206,11 @@ export default function RightSidebar() {
     if(activeSection == "readme"){
       return(
         <ReadmeGeneratorPanel repoId={activeRepo.id} />
+      )
+    }
+    if(activeSection == "changelog"){
+      return(
+        <ChangelogPanel repoId={activeRepo.id} />
       )
     }
   };
