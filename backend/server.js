@@ -17,6 +17,8 @@ import sseRoutes from "./routes/sse.js";
 import treeRoute from "./routes/repoTree.js";
 import graphRoutes from "./routes/graph.js";
 import aiRoutes from "./routes/ai.js";
+import notesRoutes from "./routes/notes.js";
+import changelogRoutes from "./routes/changelog.js";
 
 import { isAuthenticated } from "./middleware/auth.js";
 import "./config/passport.js";
@@ -93,6 +95,9 @@ app.use("/auth", authRoutes);
 app.use("/api/repo", isAuthenticated, repoRoutes);
 app.use("/api/tree", isAuthenticated, treeRoute);
 app.use("/api/graph", isAuthenticated, graphRoutes);
+app.use("/api/notes", isAuthenticated, notesRoutes);
+app.use("/api/changelog", changelogRoutes);
+
 
 /* ===========================================================
    CHAT SYSTEM (IMPORTANT ORDER!)

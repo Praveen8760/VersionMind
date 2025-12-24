@@ -7,6 +7,7 @@ import { generateSummary } from "../services/ai/summaryService.js";
 import { generateMetrics } from "../services/ai/metricsService.js";
 import { generateDependencyInsights } from "../services/ai/dependencyService.js";
 import { generateHotspots } from "../services/ai/hotspotService.js";
+import { generateReadme } from "../services/ai/readmeService.js";
 
 const router = express.Router();
 
@@ -56,8 +57,6 @@ router.get("/hotspots/:repoId", async (req, res) => {
 });
 
 // export route
-
-
 router.get("/export/:repoId", async (req, res) => {
   try {
     const { repoId } = req.params;
@@ -74,5 +73,18 @@ router.get("/export/:repoId", async (req, res) => {
     res.status(500).json({ error: "Export failed" });
   }
 });
+
+
+// Readme Generation
+router.get("/readme/:repoId", async (req, res) => {
+  try {
+    const readme = await generateReadme(req.params.repoId);
+    res.json({ readme });
+  } catch (err) {
+    console.error("[AI README ERROR]", err);
+    res.status(500).json({ error: "Failed to generate README" });
+  }
+});
+
 
 export default router;
